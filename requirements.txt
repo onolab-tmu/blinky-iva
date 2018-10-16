@@ -1,0 +1,6 @@
+numpy
+scipy
+matplotlib
+pyroomacoustics
+mir_eval
+sounddevice
