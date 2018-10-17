@@ -58,7 +58,7 @@ def sampling(num_subsets, num_speakers, metadata_file, gender_balanced=False, se
     return all_lists
 
 
-def wav_read_center(wav_list, center=True):
+def wav_read_center(wav_list, center=True, seed=None):
     '''
     Read a bunch of wav files, equalize their length
     and puts them in a numpy array
@@ -69,12 +69,20 @@ def wav_read_center(wav_list, center=True):
         A list of file names, the file names should be of format wav and monaural
     center: bool, optional
         When True (default), the signals will be centered, otherwise, only their end will be zero padded
+    seed: int
+        Provides a seed for the random number generator. When this is provided,
+        center option is ignored and the beginning of segments is placed at
+        random within the maximum length available
 
     Returns
     -------
     ndarray (n_files, n_samples)
         A 2D array that contains one signal per row
     '''
+
+    if seed is not None:
+        rng_state = np.random.get_state()
+        np.random.seed(seed)
 
     rows = []
     fs = None
@@ -103,12 +111,21 @@ def wav_read_center(wav_list, center=True):
 
     for r,row in enumerate(rows):
 
-        if center:
+        if seed is not None:
+            slack =  max_len - row.shape[0]
+            if slack > 0:
+                b = np.random.randint(0, max_len - row.shape[0])
+            else:
+                b = 0
+        elif center:
             b = (max_len - row.shape[0]) // 2
         else:
             b = 0
 
         output[r,b:b+row.shape[0]] = row
+
+    if seed is not None:
+        np.random.set_state(rng_state)
 
     return output
 
@@ -117,7 +134,7 @@ if __name__ == '__main__':
 
     n_speakers_per_sex = 7
     n_samples = 10
-    duration = 15  # seconds
+    duration = 20  # seconds
     blank = 1  # seconds
 
     # output filename pattern
@@ -143,9 +160,11 @@ if __name__ == '__main__':
     dtype = cmu_arctic.sentences[0].data.dtype
     fs = cmu_arctic.sentences[0].fs
 
+
     # a blank segment to insert between sentences
-    blank_len = int(fs * blank)
-    blank_seg = np.zeros(blank_len, dtype=dtype)
+    lmin, lmax = int(0.1) * fs, int(6.) * fs
+    def new_blank():
+        return np.zeros(lmin + np.random.randint(lmin, lmax))
 
     # keep track of metadata in a file
     metadata = {
@@ -171,16 +190,16 @@ if __name__ == '__main__':
             n = 0
             while n < n_samples:
 
-                new_sentence = [blank_seg]
-                L = blank_len
+                new_sentence = [new_blank()]
+                L = len(new_sentence[-1])
 
                 while L < duration * fs:
 
                     s = next(sentence_iter)
                     new_sentence.append(s.data)
                     L += s.data.shape[0]
-                    new_sentence.append(blank_seg)
-                    L += blank_len
+                    new_sentence.append(new_blank())
+                    L += len(new_sentence[-1])
 
                 fn = filename.format(sex=sex, spkr=speaker, ind=n+1)
                 wavfile.write(

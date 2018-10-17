@@ -1,5 +1,9 @@
 import numpy as np
+from tkinter import Tk, Button, Label
+
+import sounddevice as sd
 import pyroomacoustics as pra
+
 
 class EncodingBlinkyArray(pra.MicrophoneArray):
     '''
@@ -59,6 +63,58 @@ class EncodingBlinkyArray(pra.MicrophoneArray):
         self.signals = np.mean(np.abs(Y) ** 2, axis=1).T
 
         self.power = np.mean(np.abs(X) ** 2, axis=1).T
+
+
+# Now come the GUI part
+class PlaySoundGUI(object):
+    def __init__(self, master, fs, mix, sources, references=None):
+        self.master = master
+        self.fs = fs
+        self.mix = mix
+        self.sources = sources
+        self.sources_max = np.max(np.abs(sources))
+        self.references = references
+        master.title("Comparator")
+
+        if self.references is not None:
+            self.references *= 0.75 / np.max(np.abs(self.references))
+
+        nrow = 0
+
+        self.label = Label(master, text="Listen to the output.")
+        self.label.grid(row=nrow, columnspan=2)
+        nrow += 1
+
+        self.mix_button = Button(master, text='Mix', command=lambda: self.play(self.mix))
+        self.mix_button.grid(row=nrow, columnspan=2)
+        nrow += 1
+
+        self.buttons = []
+        for i, source in enumerate(self.sources):
+            self.buttons.append(Button(master, text='Source ' + str(i+1), command=lambda src=source: self.play(src)))
+
+            if self.references is not None:
+                self.buttons[-1].grid(row=nrow, column=1)
+                ref_sig = self.references[i,:]
+                self.buttons.append(Button(master, text='Ref ' + str(i+1), command=lambda rs=self.references[i,:]: self.play(rs)))
+                self.buttons[-1].grid(row=nrow, column=0)
+
+            else:
+                self.buttons[-1].grid(row=nrow, columnspan=2)
+
+            nrow += 1
+
+        self.stop_button = Button(master, text="Stop", command=sd.stop)
+        self.stop_button.grid(row=nrow, columnspan=2)
+        nrow += 1
+
+        self.close_button = Button(master, text="Close", command=master.quit)
+        self.close_button.grid(row=nrow, columnspan=2)
+        nrow += 1
+
+    def play(self, src):
+        sd.play(0.75 * src / self.sources_max, samplerate=self.fs, blocking=False)
+
 
 
 def generate_filters(n_sensors, length, type='binary'):
@@ -178,4 +234,35 @@ def semi_circle_layout(center, angle, distance, n, rot=None):
     v += center[:,None]
 
     return v
+
+
+def gm_layout(n, centers, std=None, weights=None, seed=None):
+
+    if seed is not None:
+        rng_state = np.random.get_state()
+        np.random.seed(seed)
+
+    if std is None:
+        std = np.ones(centers.shape[1])
+    else:
+        std = np.array(std)
+
+    if weights is None:
+        weights = np.ones(centers.shape[1]) / centers.shape[1]
+
+    locs = [] 
+
+    c_list = np.random.choice(np.arange(centers.shape[1]), size=n, p=weights)
+    c_list = np.sort(c_list)
+
+    for c in c_list:
+
+        c = np.random.choice(np.arange(centers.shape[1]), p=weights)
+        loc = centers[:,c] + np.random.randn(centers.shape[0]) * std
+        locs.append(loc)
+
+    if seed is not None:
+        np.random.set_state(rng_state)
+
+    return np.array(locs).T
 
