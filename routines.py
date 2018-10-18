@@ -257,7 +257,6 @@ def gm_layout(n, centers, std=None, weights=None, seed=None):
 
     for c in c_list:
 
-        c = np.random.choice(np.arange(centers.shape[1]), p=weights)
         loc = centers[:,c] + np.random.randn(centers.shape[0]) * std
         locs.append(loc)
 

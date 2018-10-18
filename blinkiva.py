@@ -94,6 +94,38 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False, n_iter=20, p
         for f in range(n_freq):
             Y[:,f,:] = np.dot(X[:,f,:], np.conj(W[f,:,:]))
 
+    # NMF only
+    pre_iter = 20
+    for epoch in range(pre_iter):
+
+        # Update the activations
+        U_hat = np.dot(R, G) + z[None,:]
+        U_hat_I = 1. / U_hat
+        R_I = 1. / R
+        #R *= np.sqrt( (P * R_I ** 2 + np.dot(U * U_hat_I ** 2, G.T)) / (n_freq * R_I + (n_freq - 1) * np.dot(U_hat_I, G.T)) )
+        R *= np.sqrt( (np.dot(U * U_hat_I ** 2, G.T)) / (np.dot(U_hat_I, G.T) + sparse_reg) )
+        R[R < machine_epsilon] = machine_epsilon
+
+        # Update the gains
+        U_hat = np.dot(R, G) + z[None,:]
+        U_hat_I = 1. / U_hat
+        #G *= np.sqrt( np.dot(R.T, U * U_hat_I ** 2) / ((n_freq - 1) * np.dot(R.T, U_hat_I)) )
+        G *= np.sqrt( np.dot(R.T, U * U_hat_I ** 2) / (np.dot(R.T, U_hat_I)) )
+        G[G < machine_epsilon] = machine_epsilon
+
+        # Update noise gain
+        if estimate_noise:
+            z *= np.sqrt( np.sum(U * U_hat_I ** 2, axis=0) / np.sum(U_hat_I, axis=0) )
+
+        # enforce normalization of variables
+        norm = np.mean(R, axis=0, keepdims=True)
+        R /= norm
+        G *= norm.T
+        W[:,:,:n_src] /= np.sqrt(norm[None,:,:])
+
+
+    # NMF + IVA
+
     # initial demixing
     demix(Y, X, W)
 
@@ -107,29 +139,17 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False, n_iter=20, p
                 callback(Y, extra=[W,G,R,X,U])
 
         # compute activations for sources not tied to NMF
-        if epoch >= 0:  # but only after a few iterations
-            R_all[:,n_src:] = np.sum(np.abs(Y[:,:,n_src:] * np.conj(Y[:,:,n_src:])), axis=1)
-        else:
-            R_all[:,n_src:] = 1.
+        R_all[:,n_src:] = np.sum(np.abs(Y[:,:,n_src:] * np.conj(Y[:,:,n_src:])), axis=1)
         
-        # the convention is columns of R have average value 1
-        '''
-        if R.shape[1] > n_src:
-            norm = np.mean(R_all[:,n_src:], axis=0, keepdims=True)
-            R_all[:,n_src:] /= norm
-            W[:,:,n_src:] /= np.sqrt(norm[None,:,:])
-        '''
-
         # Compute Auxiliary Variable
         # shape: (n_freq, n_src, n_mic, n_mic)
         V = np.mean((X[:,:,None,:,None] / (1e-10 + R_all[:,None,:,None,None])) * np.conj(X[:,:,None,None,:]), axis=0)
-        print(np.mean(np.abs(V), axis=(0,2,3)))
 
         # Update now the demixing matrix
         for s in range(n_chan):
-            if np.max(R_all[:,s]) < 1e-10:
-                continue
             for f in range(n_freq):
+                if np.max(V[f,s,:,:]) < 1e-10:
+                    continue
                 WV = np.dot(np.conj(W[f,:,:].T), V[f,s,:,:])
                 W[f,:,s] = np.linalg.solve(WV, I[:,s])
                 W[f,:,s] /= np.sqrt(np.inner(np.conj(W[f,:,s]), np.dot(V[f,s,:,:], W[f,:,s])))

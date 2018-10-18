@@ -73,11 +73,11 @@ if __name__ == '__main__':
     # Simulation parameters
     fs = 16000
     absorption = 0.25
-    max_order = 17
+    max_order = 0 #17
     n_sources = 14
     n_mics = 4
     n_sources_target = 3  # the determined case
-    n_blinkies = 15
+    n_blinkies = 20
 
     SIR = 10  # dB, this has to be negative
     SNR = 30   # dB, this is the SNR with respect to a single target source and microphone self-noise
@@ -106,7 +106,7 @@ if __name__ == '__main__':
         1.2 * np.ones((1, n_mics)),
         ))
 
-    target_locs = semi_circle_layout([4.1, 3.755, 1.1], 1.05 * 2 * np.pi / 3, 2., n_sources_target, rot=0.743 * np.pi)
+    target_locs = semi_circle_layout([4.1, 3.755, 1.1], np.pi / 2, 2., n_sources_target, rot=0.743 * np.pi)
     #interferer_locs = grid_layout([3., 5.5], n_sources - n_sources_target, offset=[6.5, 1., 1.7])
     interferer_locs = random_layout([3., 5.5,1.5], n_sources - n_sources_target, offset=[6.5, 1., 0.5], seed=1)
     source_locs = np.concatenate((target_locs, interferer_locs), axis=1)
@@ -128,9 +128,9 @@ if __name__ == '__main__':
 
     # Place the blinkies regularly in the room (2D plane)
     #blinky_locs = grid_layout([3,5.5], n_blinkies, offset=[1., 1., 0.8])
-    blinky_locs = gm_layout(n_blinkies, target_locs - np.c_[[0., 0., 0.5]], std=[0.7, 0.7, 0.05], seed=987)
+    #blinky_locs = gm_layout(n_blinkies, target_locs - np.c_[[0.5, 0., 0.]], std=[0.7, 0.7, 0.05], seed=987)
     #blinky_locs = grid_layout(room_dim[:2], n_blinkies, 0.7)
-    #blinky_locs = random_layout([2.5,6.5,0.3], n_blinkies, offset=[1., 0.5, 0.8], seed=2)
+    blinky_locs = random_layout([1.5,7.,1.], n_blinkies, offset=[0.5, 0.25, 0.8], seed=2)
     #blinky_locs = semi_circle_layout([4.1, 3.755, 0.75], 1.5 * 2 * np.pi / 3, 2., n_blinkies, rot=0.45 * np.pi)
     all_locs = np.concatenate((mic_locs, blinky_locs), axis=1)
 
