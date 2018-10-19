@@ -75,13 +75,13 @@ if __name__ == '__main__':
     absorption, max_order = 0.35, 17  # RT60 == 0.3
     #absorption, max_order = 0.45, 12  # RT60 == 0.2
     n_sources = 14
-    n_mics = 7
-    n_sources_target = 4  # the determined case
+    n_mics = 5
+    n_sources_target = 3  # the determined case
     n_blinkies = 20
 
     # set the source powers, the first one is half
     source_std = np.ones(n_sources_target)
-    source_std[0] /= np.sqrt(2.)
+    source_std[0] /= np.sqrt(4.)
 
     SIR = 10  # dB
     SNR = 60  # dB, this is the SNR with respect to a single target source and microphone self-noise
@@ -92,12 +92,12 @@ if __name__ == '__main__':
     win_s = pra.transform.compute_synthesis_window(win_a, framesize // 2)
 
     # algorithm parameters
-    n_iter = 101
-    n_nmf_pre_iter = 20
-    n_nmf_sub_iter = 5
-    n_iva_sub_iter = 5
-    use_amplitude = True
-    estimate_noise = True
+    n_iter = 200
+    n_nmf_pre_iter = 1000
+    n_nmf_sub_iter = 20
+    n_iva_sub_iter = 4
+    use_amplitude = False
+    estimate_noise = False
 
     n_iter_iva = n_iter
 
@@ -226,7 +226,7 @@ if __name__ == '__main__':
             y = y[:,new_ord]
 
         m = np.minimum(y.shape[0]-framesize//2, ref.shape[1])
-        sdr, sir, sar, perm = bss_eval_sources(ref[:n_mics,:m,0], y[framesize//2:m+framesize//2,:n_mics].T)
+        sdr, sir, sar, perm = bss_eval_sources(ref[:n_sources_target,:m,0], y[framesize//2:m+framesize//2,:n_sources_target].T)
         SDR.append(sdr)
         SIR.append(sir)
 
@@ -291,10 +291,10 @@ if __name__ == '__main__':
     # Compare SIR
     #############
     m = np.minimum(y.shape[0]-framesize//2, ref.shape[1])
-    sdr, sir, sar, perm = bss_eval_sources(ref[:n_mics,:m,0], y[framesize//2:m+framesize//2,:n_mics].T)
+    sdr, sir, sar, perm = bss_eval_sources(ref[:n_sources_target,:m,0], y[framesize//2:m+framesize//2,:n_sources_target].T)
 
     # reorder the vector of reconstructed signals
-    y[:,:n_mics] = y[:,perm]
+    y_hat = y[:,perm]
 
     print('SDR:', sdr)
     print('SIR:', sir)
@@ -309,7 +309,7 @@ if __name__ == '__main__':
         plt.title('Source {} (clean)'.format(i))
 
         plt.subplot(2,n_sources_target, i+n_sources_target+1)
-        plt.specgram(y[:,i], NFFT=1024, Fs=room.fs)
+        plt.specgram(y_hat[:,i], NFFT=1024, Fs=room.fs)
         plt.title('Source {} (separated)'.format(i))
 
     plt.tight_layout(pad=0.5)
@@ -343,7 +343,7 @@ if __name__ == '__main__':
 
         wavfile.write('bss_iva_mix.wav', room.fs,
                 pra.normalize(mics_signals[0,:], bits=16).astype(np.int16))
-        for i, sig in enumerate(y):
+        for i, sig in enumerate(y_hat):
             wavfile.write('bss_iva_source{}.wav'.format(i+1), room.fs,
                     pra.normalize(sig, bits=16).astype(np.int16))
 
@@ -352,5 +352,5 @@ if __name__ == '__main__':
         from tkinter import Tk
         # Make a simple GUI to listen to the separated samples
         root = Tk()
-        my_gui = PlaySoundGUI(root, room.fs, mics_signals[0,:], y.T, references=ref[:,:,0])
+        my_gui = PlaySoundGUI(root, room.fs, mics_signals[0,:], y_hat.T, references=ref[:,:,0])
         root.mainloop()

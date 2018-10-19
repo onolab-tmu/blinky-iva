@@ -81,7 +81,7 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
 
     R[:,:] = 0.1 + 0.9 * np.random.rand(n_frames, n_src)
     G = 0.1 + 0.9 * np.random.rand(n_src, n_blink)
-    R /= np.linalg.norm(U)
+    R *= np.linalg.norm(U) / np.linalg.norm(R)
 
     if seed is not None:
         np.random.set_state(rng_state)
@@ -138,11 +138,10 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
         W[:,:,:n_src] /= np.sqrt(norm[None,:,:])
 
         # compute cost function
-        '''
         U_hat = np.dot(R, G)
         cf = np.mean(np.log(U_hat) + U / U_hat)
-        print(cf)
-        '''
+        if epoch == 0 or epoch == n_nmf_pre_iter - 1:
+            print(cf)
 
     # NMF + IVA
 
@@ -167,8 +166,8 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
         V = np.mean((X[:,:,None,:,None] / (1e-10 + R_all[:,None,:,None,None])) * np.conj(X[:,:,None,None,:]), axis=0)
 
         # Update now the demixing matrix
-        #for s in range(n_chan):
-        for s in range(n_src):
+        #for s in range(n_src):
+        for s in range(n_chan):
 
             # only update the demixing matrices where there is signal
             I_up = np.max(V[:,s,:,:], axis=(1,2)) > 1e-10
@@ -189,13 +188,11 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
         P = np.linalg.norm(Y[:,:,:n_src], axis=1)
 
         # enforce normalization of variables
-        '''
         norm = 1. / np.sqrt(np.mean(np.abs(Y[:,:,:n_src]), axis=(0,1)))
         P *= norm[None,:]
         R *= norm[None,:]
         G /= norm[:,None]
         W[:,:,:n_src] *= norm[None,None,:]
-        '''
 
         if (epoch + 1) % n_iva_sub_iter != 0:
             continue
