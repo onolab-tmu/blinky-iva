@@ -72,15 +72,19 @@ if __name__ == '__main__':
 
     # Simulation parameters
     fs = 16000
-    absorption = 0.25
-    max_order = 0 #17
+    absorption, max_order = 0.35, 17  # RT60 == 0.3
+    #absorption, max_order = 0.45, 12  # RT60 == 0.2
     n_sources = 14
-    n_mics = 4
-    n_sources_target = 3  # the determined case
+    n_mics = 7
+    n_sources_target = 4  # the determined case
     n_blinkies = 20
 
-    SIR = 10  # dB, this has to be negative
-    SNR = 30   # dB, this is the SNR with respect to a single target source and microphone self-noise
+    # set the source powers, the first one is half
+    source_std = np.ones(n_sources_target)
+    source_std[0] /= np.sqrt(2.)
+
+    SIR = 10  # dB
+    SNR = 60  # dB, this is the SNR with respect to a single target source and microphone self-noise
 
     # STFT parameters
     framesize = 4096
@@ -88,7 +92,14 @@ if __name__ == '__main__':
     win_s = pra.transform.compute_synthesis_window(win_a, framesize // 2)
 
     # algorithm parameters
-    n_iter = 51
+    n_iter = 101
+    n_nmf_pre_iter = 20
+    n_nmf_sub_iter = 5
+    n_iva_sub_iter = 5
+    use_amplitude = True
+    estimate_noise = True
+
+    n_iter_iva = n_iter
 
     # Geometry of the room and location of sources and microphones
     room_dim = np.array([10, 7.5, 3])
@@ -123,15 +134,17 @@ if __name__ == '__main__':
     '''
 
     # Prepare the signals
-    wav_files = sampling(1, n_sources, 'samples/metadata.json', gender_balanced=True, seed=0)[0]
+    wav_files = sampling(1, n_sources, 'samples/metadata.json', gender_balanced=True, seed=8)[0]
     signals = wav_read_center(wav_files, seed=123)
 
     # Place the blinkies regularly in the room (2D plane)
     #blinky_locs = grid_layout([3,5.5], n_blinkies, offset=[1., 1., 0.8])
-    #blinky_locs = gm_layout(n_blinkies, target_locs - np.c_[[0.5, 0., 0.]], std=[0.7, 0.7, 0.05], seed=987)
+    #blinky_locs = gm_layout(n_blinkies, target_locs - np.c_[[0., 0., 0.5]], std=[0.7, 0.7, 0.05], seed=987)
     #blinky_locs = grid_layout(room_dim[:2], n_blinkies, 0.7)
-    blinky_locs = random_layout([1.5,7.,1.], n_blinkies, offset=[0.5, 0.25, 0.8], seed=2)
+    #blinky_locs = random_layout([1.5,7.,1.], n_blinkies, offset=[0.5, 0.25, 0.8], seed=2)
     #blinky_locs = semi_circle_layout([4.1, 3.755, 0.75], 1.5 * 2 * np.pi / 3, 2., n_blinkies, rot=0.45 * np.pi)
+    blinky_locs = semi_circle_layout([4.1, 3.755, 1.1], np.pi, 3.5, n_blinkies, rot=0.743 * np.pi - np.pi / 4)
+    blinky_locs += np.random.randn(*blinky_locs.shape) * 0.005  # few millimeters shift
     all_locs = np.concatenate((mic_locs, blinky_locs), axis=1)
 
     # Create the room itself
@@ -157,24 +170,27 @@ if __name__ == '__main__':
             'sir' : SIR,
             'n_src' : n_sources,
             'n_tgt' : n_sources_target,
+            'src_std' : source_std,
             'ref_mic' : 0,
             }
 
-    def callback_mix(premix, snr=0, sir=0, ref_mic=0, n_src=None, n_tgt=None):
+    def callback_mix(premix, snr=0, sir=0, ref_mic=0, n_src=None, n_tgt=None, src_std=None):
 
         # first normalize all separate recording to have unit power at microphone one
         p_mic_ref = np.std(premix[:,ref_mic,:], axis=1)
         premix /= p_mic_ref[:,None,None]
-
-        # now compute the power of interference signal needed to achieve desired SIR
-        sigma_i = np.sqrt(10 ** (- sir / 10) / (n_src - n_tgt))
-        premix[n_sources_target:n_sources,:,:] *= sigma_i
+        premix[:n_tgt,:,:] *= src_std[:,None,None]
 
         # compute noise variance
-        sigma_n = np.sqrt(10 ** (- snr / 10))
+        sigma_n = np.sqrt(10 ** (- snr / 10) * np.mean(src_std ** 2))
+
+        # now compute the power of interference signal needed to achieve desired SIR
+        num = 10 ** (- sir / 10) * np.sum(src_std ** 2)
+        sigma_i = np.sqrt(num / (n_src - n_tgt))
+        premix[n_tgt:n_src,:,:] *= sigma_i
 
         # Mix down the recorded signals
-        mix = np.sum(premix[:n_sources,:], axis=0) + sigma_n * np.random.randn(*premix.shape[1:])
+        mix = np.sum(premix[:n_src,:], axis=0) + sigma_n * np.random.randn(*premix.shape[1:])
 
         return mix
 
@@ -227,13 +243,16 @@ if __name__ == '__main__':
     X_mics =  X_all[:,:,:n_mics]
     U_blinky = np.sum(np.abs(X_all[:,:,n_mics:]) ** 2, axis=1)  # shape: (n_frames, n_blinkies)
 
+    if use_amplitude:
+        U_blinky = np.sqrt(U_blinky)
+
     #X_mics /= np.linalg.norm(X_mics) / np.prod(X_mics.shape)
     #U_blinky /= np.linalg.norm(U_blinky) / np.prod(U_blinky.shape)
 
     # Run BSS
     if args.algo == 'auxiva':
         # Run AuxIVA
-        Y = pra.bss.auxiva(X_mics, n_iter=n_iter, proj_back=True,
+        Y = pra.bss.auxiva(X_mics, n_iter=n_iter_iva, proj_back=True,
                 #callback=convergence_callback,
                 )
     elif args.algo == 'ilrma':
@@ -243,8 +262,11 @@ if __name__ == '__main__':
             )
     elif args.algo == 'blinkiva':
         # Run BlinkIVA
-        Y, W, G, R, z = blinkiva(X_mics, U_blinky, n_src=n_sources_target, n_iter=n_iter,
-                #estimate_noise=True,
+        Y, W, G, R, z = blinkiva(X_mics, U_blinky, n_src=n_sources_target,
+                n_iter=n_iter, n_nmf_pre_iter=n_nmf_pre_iter,
+                n_nmf_sub_iter=n_nmf_sub_iter, n_iva_sub_iter=n_iva_sub_iter,
+                seed=0,
+                estimate_noise=estimate_noise,
                 #callback=convergence_callback,
                 return_filters=True)
 
@@ -293,7 +315,14 @@ if __name__ == '__main__':
     plt.tight_layout(pad=0.5)
 
     room.plot(img_order=0)
-    plt.matshow(U_blinky.T, aspect='auto')
+
+    if args.algo == 'blinkiva':
+        plt.matshow(U_blinky.T, aspect='auto')
+        plt.title('Blinky Data')
+        plt.tight_layout(pad=0.5)
+        plt.matshow(np.dot(R, G).T, aspect='auto')
+        plt.title('NMF approx')
+        plt.tight_layout(pad=0.5)
 
     plt.figure()
     a = np.array(SDR)

@@ -127,6 +127,8 @@ def wav_read_center(wav_list, center=True, seed=None):
     if seed is not None:
         np.random.set_state(rng_state)
 
+    output /= 2 ** 15
+
     return output
 
         
@@ -134,7 +136,7 @@ if __name__ == '__main__':
 
     n_speakers_per_sex = 7
     n_samples = 10
-    duration = 20  # seconds
+    duration = 15  # seconds
     blank = 1  # seconds
 
     # output filename pattern
@@ -162,9 +164,9 @@ if __name__ == '__main__':
 
 
     # a blank segment to insert between sentences
-    lmin, lmax = int(0.1) * fs, int(6.) * fs
+    lmin, lmax = int(0.5) * fs, int(2.5) * fs
     def new_blank():
-        return np.zeros(lmin + np.random.randint(lmin, lmax))
+        return np.zeros(lmin + np.random.randint(lmin, lmax), dtype=dtype)
 
     # keep track of metadata in a file
     metadata = {

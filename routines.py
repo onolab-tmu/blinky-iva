@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from tkinter import Tk, Button, Label
 
@@ -73,7 +74,7 @@ class PlaySoundGUI(object):
         self.mix = mix
         self.sources = sources
         self.sources_max = np.max(np.abs(sources))
-        self.references = references
+        self.references = references.copy()
         master.title("Comparator")
 
         if self.references is not None:
@@ -252,8 +253,8 @@ def gm_layout(n, centers, std=None, weights=None, seed=None):
 
     locs = [] 
 
-    c_list = np.random.choice(np.arange(centers.shape[1]), size=n, p=weights)
-    c_list = np.sort(c_list)
+    rep = math.ceil(n / centers.shape[1])
+    c_list = np.repeat(np.arange(centers.shape[1]), rep)[:n]
 
     for c in c_list:
 
