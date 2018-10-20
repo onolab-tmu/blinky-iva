@@ -4,55 +4,64 @@ This file contains the code to run the more systematic simulation.
 import argparse, json, os
 import numpy as np
 import pyroomacoustics as pra
+import rrtools
 
 from routines import PlaySoundGUI, grid_layout, semi_circle_layout, random_layout, gm_layout
 from blinkiva import blinkiva
 from generate_samples import sampling, wav_read_center
 
-# convergence monitoring callback
-def convergence_callback(Y, n_targets, SDR, SIR, ref, framesize, win_s):
-    from mir_eval.separation import bss_eval_sources
-    y = pra.transform.synthesis(Y, framesize, framesize // 2, win=win_s,)
-
-    if args.algo != 'blinkiva':
-        new_ord = np.argsort(np.std(y, axis=0))[::-1]
-        y = y[:,new_ord]
-
-    m = np.minimum(y.shape[0]-framesize//2, ref.shape[1])
-    sdr, sir, sar, perm = bss_eval_sources(
-            ref[:n_sources_target,:m,0],
-            y[framesize//2:m+framesize//2,:n_targets].T,
-            )
-    SDR.append(sdr)
-    SIR.append(sir)
+# find the absolute path to this file
+base_dir = os.path.abspath(os.path.split(__file__)[0])
 
 # algorithm parameters
-def generate(n_targets, n_mics, rt60, sir, snr, wav_files, config):
+def generate(n_targets, n_mics, rt60, sinr, wav_files, config):
     '''
     This function will prepare all the data to be processed
 
     The single argument is a dictionary containing all the parameters
     '''
 
+    return mix, premix
+
+
+def one_loop(args):
+
+    n_targets, n_mics, rt60, sinr, wav_files, seed = args
+
+    # set MKL to only use one thread if present
+    try:
+        import mkl
+        mkl.set_num_threads(1)
+    except ImportError:
+        pass
+
+    # set the RNG seed
+    rng_state = np.random.get_state()
+    np.random.seed(seed)
+
+    # STFT parameters
+    framesize = parameters['stft_params']['framesize']
+    win_a = pra.hann(framesize)
+    win_s = pra.transform.compute_synthesis_window(win_a, framesize // 2)
+
+    # Generate the audio signals
+
     # get the simulation parameters from the json file
     # Simulation parameters
-    n_repeat = config['n_repeat']
-    seed = config['seed']
-    fs = config['fs']
+    n_repeat = parameters['n_repeat']
+    fs = parameters['fs']
+    snr = parameters['snr']
 
-    n_interferers = config['n_interferers']
-    n_blinkies = config['n_blinkies']
-    ref_mic = config['ref_mic']
-    room_dim = np.array(config['room_dim'])
+    n_interferers = parameters['n_interferers']
+    n_blinkies = parameters['n_blinkies']
+    ref_mic = parameters['ref_mic']
+    room_dim = np.array(parameters['room_dim'])
 
-    source_var = np.ones(n_targets)
-    source_var[0] = config['weak_source_var']
+    sources_var = np.ones(n_targets)
+    sources_var[0] = parameters['weak_source_var']
 
     # total number of sources
     n_sources = n_interferers + n_targets
-
-    # Fix RNG Seed!
-    np.random.seed(seed)
 
     # Geometry of the room and location of sources and microphones
     interferer_locs = random_layout([3., 5.5, 1.5], n_interferers, offset=[6.5, 1., 0.5], seed=1)
@@ -84,13 +93,15 @@ def generate(n_targets, n_mics, rt60, sir, snr, wav_files, config):
     # Create the room itself
     room = pra.ShoeBox(room_dim,
             fs=fs,
-            absorption=rt60['absorption'],
-            max_order=rt60['max_order'],
+            absorption=parameters['rt60_list'][rt60]['absorption'],
+            max_order=parameters['rt60_list'][rt60]['max_order'],
             )
 
     # Place all the sound sources
-    for sig, loc in zip(signals, source_locs.T,):
+    for sig, loc in zip(signals[-n_sources:,:], source_locs.T,):
         room.add_source(loc, signal=sig)
+
+    assert signals.shape[0] == n_sources, 'Number of signals doesn''t match number of sources'
 
     # Place the microphone array
     room.add_microphone_array(
@@ -109,30 +120,20 @@ def generate(n_targets, n_mics, rt60, sir, snr, wav_files, config):
     premix /= p_mic_ref[:,None,None]
 
     # scale to pre-defined variance
-    premix[:n_targets,:,:] *= np.sqrt(src_var[:,None,None])
+    premix[:n_targets,:,:] *= np.sqrt(sources_var[:,None,None])
 
     # compute noise variance
-    sigma_n = np.sqrt(10 ** (- snr / 10) * np.sum(src_var))
+    sigma_n = np.sqrt(10 ** (- snr / 10) * np.sum(sources_var))
 
-    # now compute the power of interference signal needed to achieve desired SIR
-    sigma_i = np.sqrt(10 ** (- sir / 10) * np.sum(src_var) / n_interferers)
-    premix[n_tgt:,:,:] *= sigma_i
+    # now compute the power of interference signal needed to achieve desired SINR
+    sigma_i = np.sqrt(
+            np.maximum(0, 10 ** (- sinr / 10) * np.sum(sources_var) - sigma_n ** 2) / n_interferers
+            )
+    premix[n_targets:,:,:] *= sigma_i
 
     # Mix down the recorded signals
-    mix = np.sum(premix[:n_src,:], axis=0) + sigma_n * np.random.randn(*premix.shape[1:])
+    mix = np.sum(premix, axis=0) + sigma_n * np.random.randn(*premix.shape[1:])
 
-    return mix, premix
-
-
-def one_loop(n_targets, n_mics, rt60, sir, snr, wav_files, config):
-
-    # STFT parameters
-    framesize = config['stft_params']['framesize']
-    win_a = pra.hann(framesize)
-    win_s = pra.transform.compute_synthesis_window(win_a, framesize // 2)
-
-    # Generate the audio signals
-    mix, premix = generate(n_targets, n_mics, rt60, sir, snr, wav_files, config)
     ref = np.moveaxis(premix, 1, 2)
     
     # START BSS
@@ -147,19 +148,45 @@ def one_loop(n_targets, n_mics, rt60, sir, snr, wav_files, config):
     X_mics =  X_all[:,:,:n_mics]
     U_blinky = np.sum(np.abs(X_all[:,:,n_mics:]) ** 2, axis=1)  # shape: (n_frames, n_blinkies)
 
-    results = {}
+    # convergence monitoring callback
+    def convergence_callback(Y, n_targets, SDR, SIR, ref, framesize, win_s, algo_name):
+        from mir_eval.separation import bss_eval_sources
+        y = pra.transform.synthesis(Y, framesize, framesize // 2, win=win_s,)
 
-    for name, kwargs in config['algorithm_kwargs'].items():
+        if algo_name != 'blinkiva':
+            new_ord = np.argsort(np.std(y, axis=0))[::-1]
+            y = y[:,new_ord]
 
-        results[name] = { 'SDR' : [], 'SIR' : [], }
+        m = np.minimum(y.shape[0]-framesize//2, ref.shape[1])
+        sdr, sir, sar, perm = bss_eval_sources(
+                ref[:n_targets,:m,0],
+                y[framesize//2:m+framesize//2,:n_targets].T,
+                )
+        SDR.append(sdr.tolist())
+        SIR.append(sir.tolist())
+
+    # store results in a list, one entry per algorithm
+    results = []
+
+    for name, kwargs in parameters['algorithm_kwargs'].items():
+
+        results.append({ 
+                'algorithm' : name,
+                'n_targets' : n_targets,
+                'n_mics' : n_mics,
+                'rt60' : rt60,
+                'sinr' : sinr,
+                'seed' : seed,
+                'sdr' : [], 'sir' : [],  # to store the result
+                })
 
         cb = lambda Y :  convergence_callback(
                 Y, n_targets,
-                results[name]['SDR'], results[name]['SIR'],
-                ref, framesize, win_s,
+                results[-1]['sdr'], results[-1]['sir'],
+                ref, framesize, win_s, name,
                 )
 
-        if args.algo == 'auxiva':
+        if name == 'auxiva':
             # Run AuxIVA
             Y = pra.bss.auxiva(
                     X_mics,
@@ -167,7 +194,7 @@ def one_loop(n_targets, n_mics, rt60, sir, snr, wav_files, config):
                     **kwargs,
                     )
 
-        elif args.algo == 'blinkiva':
+        elif name == 'blinkiva':
             # Run BlinkIVA
             Y = blinkiva(
                     X_mics, U_blinky, n_src=n_targets,
@@ -181,22 +208,52 @@ def one_loop(n_targets, n_mics, rt60, sir, snr, wav_files, config):
         # The last evaluation
         cb(Y)
 
+    # restore RNG former state
+    np.random.set_state(rng_state)
+
     return results
 
 
-def generate_arguments(config):
-    ''' add stuff there now '''
+def generate_arguments(parameters):
+    ''' This will generate the list of arguments to run simulation for '''
+
+    rng_state = np.random.get_state()
+    np.random.seed(parameters['seed'])
+
+    gen_files_seed = int(np.random.randint(2 ** 32, dtype=np.uint32))
+    all_wav_files = sampling(
+            parameters['n_repeat'],
+            parameters['n_interferers'] + np.max(parameters['n_targets_list']),
+            parameters['samples_list'],
+            gender_balanced=True,
+            seed=gen_files_seed,
+            )
+
+    args = []
+
+    for n_targets in parameters['n_targets_list']:
+        for n_mics in parameters['n_mics_list']:
+            for rt60 in parameters['rt60_list'].keys():
+                for sinr in parameters['sinr_list']:
+                    for wav_files in all_wav_files:
+
+                        # generate the seed for this simulation
+                        seed = int(np.random.randint(2 ** 32, dtype=np.uint32))
+
+                        # add the new combination to the list
+                        args.append([n_targets, n_mics, rt60, sinr, wav_files, seed])
+    
+    np.random.set_state(rng_state)
+
+    return args
+
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser('Runs the Multi-modal Blind Source Separation simulation.')
-    subparsers = parser.add_subparsers(help='sub-command help')
-
-    # create the parser for the "gen" command
-    parser_gen = subparsers.add_parser('gen', help='Pre-generate the data for the simulation')
-    parser_gen.add_argument('config', type=str, help='The JSON configuration file')
-    parser_gen.set_defaults(func=generate)
-
-    # magic!
-    args = parser.parse_args()
-    args.func(args)
+    rrtools.run(
+            one_loop,
+            generate_arguments,
+            base_dir=base_dir,
+            results_dir='data/',
+            description='Simulation for Multi-modal BSS with blinkies (ICASSP 2019)',
+            )

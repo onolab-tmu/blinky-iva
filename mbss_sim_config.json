@@ -1,27 +1,24 @@
 {
   "name" : "mbss_sim",
 
-  "generate" : {
-    "n_repeat" : 10,
-    "seed" : 0,
-    "fs" : 16000,
-    "room_dim" : [10, 7.5, 3],
-    "rt60_list" : {
-      "0.2" : { "max_order" : 12, "absorption" : 0.45 },
-      "0.3" : { "max_order" : 17, "absorption" : 0.35 }
-    },
-    "n_interferers" : 10,
-    "n_targets_list" : [2,3,4],
-    "n_mics_list" : [3,4,5,6,7],
-    "n_blinkies" : 60,
-    "ref_mic" : 0,
-    "dir" : "mbss_sim_data",
-    "files_info" : "files_info.json",
-    "filename_template" : "premix_tgt_{}_mic_{}_rt_{}_{}.npz"
+  "n_repeat" : 1,
+  "seed" : 0,
+  "n_targets_list" : [2],
+  "n_mics_list" : [3],
+  "rt60_list" : {
+    "0.2" : { "max_order" : 12, "absorption" : 0.45 },
+    "0.3" : { "max_order" : 17, "absorption" : 0.35 }
   },
-
-  "simulate" : {
-  },
+  "sinr_list" : [10],
+  "samples_list" : "samples/metadata.json",
+  "snr" : 60,
+  "fs" : 16000,
+  "room_dim" : [10, 7.5, 3],
+  "weak_source_var" : 0.25,
+  "n_interferers" : 10,
+  "n_blinkies" : 40,
+  "ref_mic" : 0,
+  "dir" : "data",
 
   "stft_params" : {
     "framesize" : 4096
@@ -33,11 +30,12 @@
       "n_nmf_pre_iter" : 50000,
       "n_nmf_sub_iter" : 10,
       "n_iva_sub_iter" : 1,
-      "use_amplitude" : false,
-      "estimate_noise" : false
+      "estimate_noise" : false,
+      "proj_back" : true
     },
-    "iva" : {
-      "n_iter" : 300
+    "auxiva" : {
+      "n_iter" : 300,
+      "proj_back" : true
     }
   }
 }
