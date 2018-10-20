@@ -13,20 +13,29 @@ from generate_samples import sampling, wav_read_center
 # find the absolute path to this file
 base_dir = os.path.abspath(os.path.split(__file__)[0])
 
-# algorithm parameters
-def generate(n_targets, n_mics, rt60, sinr, wav_files, config):
-    '''
-    This function will prepare all the data to be processed
-
-    The single argument is a dictionary containing all the parameters
-    '''
-
-    return mix, premix
-
+def init(parameters):
+    parameters['base_dir'] = base_dir
 
 def one_loop(args):
 
+    import numpy
+    np = numpy
+
+    import pyroomacoustics
+    pra = pyroomacoustics
+
+    import sys
+    sys.path.append(parameters['base_dir'])
+
+    from routines import semi_circle_layout, random_layout
+    from blinkiva import blinkiva
+    from generate_samples import wav_read_center
+
     n_targets, n_mics, rt60, sinr, wav_files, seed = args
+
+    # this is the underdetermined case. We don't do that.
+    if n_mics < n_targets:
+        return []
 
     # set MKL to only use one thread if present
     try:
@@ -101,7 +110,7 @@ def one_loop(args):
     for sig, loc in zip(signals[-n_sources:,:], source_locs.T,):
         room.add_source(loc, signal=sig)
 
-    assert signals.shape[0] == n_sources, 'Number of signals doesn''t match number of sources'
+    assert len(room.sources) == n_sources, 'Number of signals ({}) doesn''t match number of sources ({})'.format(signals.shape[0], n_sources)
 
     # Place the microphone array
     room.add_microphone_array(
@@ -253,6 +262,7 @@ if __name__ == '__main__':
     rrtools.run(
             one_loop,
             generate_arguments,
+            func_init=init,
             base_dir=base_dir,
             results_dir='data/',
             description='Simulation for Multi-modal BSS with blinkies (ICASSP 2019)',

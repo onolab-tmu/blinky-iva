@@ -5,7 +5,7 @@ Blind Source Separation using Independent Vector Analysis with Auxiliary Functio
 '''
 import numpy as np
 
-from pyroomacoustics.bss.common import projection_back
+from pyroomacoustics.bss import projection_back
 
 def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
         n_iter=20, n_nmf_pre_iter=30, n_nmf_sub_iter=4, n_iva_sub_iter=4,
