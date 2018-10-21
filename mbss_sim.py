@@ -189,11 +189,14 @@ def one_loop(args):
                 'sdr' : [], 'sir' : [],  # to store the result
                 })
 
-        cb = lambda Y :  convergence_callback(
-                Y, n_targets,
-                results[-1]['sdr'], results[-1]['sir'],
-                ref, framesize, win_s, name,
-                )
+        if parameters['monitor_convergence']:
+            cb = lambda Y :  convergence_callback(
+                    Y, n_targets,
+                    results[-1]['sdr'], results[-1]['sir'],
+                    ref, framesize, win_s, name,
+                    )
+        else:
+            cb = None
 
         if name == 'auxiva':
             # Run AuxIVA
@@ -215,7 +218,11 @@ def one_loop(args):
             continue
 
         # The last evaluation
-        cb(Y)
+        convergence_callback(
+                Y, n_targets,
+                results[-1]['sdr'], results[-1]['sir'],
+                ref, framesize, win_s, name,
+                )
 
     # restore RNG former state
     np.random.set_state(rng_state)
