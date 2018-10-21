@@ -1,8 +1,7 @@
 
-import sys, argparse, os
+import sys, argparse, os, json
 import numpy as np
 import pandas as pd
-import json
 
 import matplotlib
 matplotlib.use('TkAgg')
@@ -44,6 +43,10 @@ if __name__ == '__main__':
             data_files.append(data_file)
         else:
             raise ValueError('File {} doesn''t exist'.format(data_file))
+
+        # get the simulation config
+        with open(os.path.join(data_dir, 'parameters.json'), 'r') as f:
+                parameters = json.load(f)
 
 
     # algorithms to take in the plot
@@ -125,40 +128,53 @@ if __name__ == '__main__':
                                 light=.75, reverse=True, hue=1.)
     sns.set_palette(pal)
 
-    select = np.logical_and(
-            df['RT60'] == '0.2',
-            df['SINR'] == 10,
+    fig_dir = 'figures/{}_{}_{}'.format(
+            parameters['name'], parameters['_date'], parameters['_git_sha'],
             )
 
-    for metric in ['SDR', 'SIR']:
+    if not os.path.exists(fig_dir):
+        os.mkdir(fig_dir)
 
-        g = sns.factorplot(data=df[select],
-                x='Mics', y=metric,
-                hue='Algorithm', col='Strength', row='Sources',
-                col_order=['All sources (avg.)', 'Weak', 'Strong (avg.)',],
-                hue_order=['AuxIVA','BlinkIVA'], kind='box',
-                #facet_kws={'subplot_kws': {'yscale':'log'}},
-                #legend=False,
-                #size=3, aspect=0.65,
-                )
+    fn_tmp = os.path.join(fig_dir, 'RT60_{rt60}_SINR_{sinr}_{metric}.pdf')
 
-        '''
-        g.set(ylim=[1e-1, 50])
+    for rt60 in parameters['rt60_list']:
+        for sinr in parameters['sinr_list']:
 
-        left_ax = g.facet_axis(0,0)
-        left_ax.set(ylabel='Error [$^\circ$]')
-        leg = left_ax.legend(
-                title='Algorithm', frameon=True,
-                framealpha=0.85, fontsize='xx-small', loc='upper left',
-                )
-        leg.get_frame().set_linewidth(0.0)
-        '''
+            select = np.logical_and(
+                    df['RT60'] == '0.2',
+                    df['SINR'] == 10,
+                    )
 
-        sns.despine(offset=10, trim=False, left=True, bottom=True)
+            for metric in ['SDR', 'SIR']:
 
-        plt.tight_layout(pad=0.5)
+                g = sns.factorplot(data=df[select],
+                        x='Mics', y=metric,
+                        hue='Algorithm', col='Strength', row='Sources',
+                        col_order=['All sources (avg.)', 'Weak', 'Strong (avg.)',],
+                        hue_order=['AuxIVA','BlinkIVA'], kind='box',
+                        legend=False,
+                        #size=3, aspect=0.65,
+                        )
 
-    #plt.savefig('figures/doa_room.pdf')
+
+                left_ax = g.facet_axis(0,0)
+                leg = left_ax.legend(
+                        title='Algorithm', frameon=True,
+                        framealpha=0.85, fontsize='xx-small', loc='upper left',
+                        )
+                leg.get_frame().set_linewidth(0.0)
+
+                sns.despine(offset=10, trim=False, left=True, bottom=True)
+
+                plt.tight_layout(pad=0.01)
+
+                plt.subplots_adjust(top=0.9)
+                g.fig.suptitle('\# blinkies={}, RT60={}, SINR={}'.format(
+                    parameters['n_blinkies'], rt60, sinr
+                    ))
+
+                fig_fn = fn_tmp.format(rt60=rt60, sinr=sinr, metric=metric)
+                plt.savefig(fig_fn, bbox_extra_artists=(leg,), bbox_inches='tight')
 
     if plot_flag:
         plt.show()

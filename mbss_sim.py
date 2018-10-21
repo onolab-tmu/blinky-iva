@@ -27,7 +27,7 @@ def one_loop(args):
     import sys
     sys.path.append(parameters['base_dir'])
 
-    from routines import semi_circle_layout, random_layout
+    from routines import semi_circle_layout, random_layout, gm_layout
     from blinkiva import blinkiva
     from generate_samples import wav_read_center
 
@@ -75,13 +75,30 @@ def one_loop(args):
     # Geometry of the room and location of sources and microphones
     interferer_locs = random_layout([3., 5.5, 1.5], n_interferers, offset=[6.5, 1., 0.5], seed=1)
 
-    blinky_locs = semi_circle_layout(
+    target_locs = semi_circle_layout(
             [4.1, 3.755, 1.1],
-            np.pi, 3.5,
-            n_blinkies,
-            rot=0.743 * np.pi - np.pi / 4,
+            np.pi / 2, 2.,
+            n_targets,
+            rot=0.743 * np.pi,
             )
-    blinky_locs += np.random.randn(*blinky_locs.shape) * 0.01  # few millimeters shift
+
+    source_locs = np.concatenate((target_locs, interferer_locs), axis=1)
+
+    if parameters['blinky_geometry'] == 'gm':
+        ''' Normally distributed in the vicinity of each source '''
+        blinky_locs = gm_layout(
+                n_blinkies, target_locs - np.c_[[0., 0., 0.4]],
+                std=[0.4, 0.4, 0.05], seed=987,
+                )
+    else:
+        ''' default is semi-circular '''
+        blinky_locs = semi_circle_layout(
+                [4.1, 3.755, 1.1],
+                np.pi, 3.5,
+                n_blinkies,
+                rot=0.743 * np.pi - np.pi / 4,
+                )
+        blinky_locs += np.random.randn(*blinky_locs.shape) * 0.01  # few millimeters shift
 
     mic_locs = np.vstack((
         pra.circular_2D_array([4.1, 3.76], n_mics, np.pi / 2, 0.02),
@@ -89,13 +106,6 @@ def one_loop(args):
         ))
     all_locs = np.concatenate((mic_locs, blinky_locs), axis=1)
 
-    target_locs = semi_circle_layout(
-            [4.1, 3.755, 1.1],
-            np.pi / 2, 2.,
-            n_targets,
-            rot=0.743 * np.pi,
-            )
-    source_locs = np.concatenate((target_locs, interferer_locs), axis=1)
 
     signals = wav_read_center(wav_files, seed=123)
 
@@ -249,6 +259,11 @@ def generate_arguments(parameters):
 
     for n_targets in parameters['n_targets_list']:
         for n_mics in parameters['n_mics_list']:
+
+            # we don't do underdetermined
+            if n_targets > n_mics:
+                continue
+
             for rt60 in parameters['rt60_list'].keys():
                 for sinr in parameters['sinr_list']:
                     for wav_files in all_wav_files:

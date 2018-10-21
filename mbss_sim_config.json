@@ -17,6 +17,7 @@
   "weak_source_var" : 0.25,
   "n_interferers" : 10,
   "n_blinkies" : 20,
+  "blinky_geometry" : "gm",
   "ref_mic" : 0,
   "dir" : "data",
   "monitor_convergence" : false,
