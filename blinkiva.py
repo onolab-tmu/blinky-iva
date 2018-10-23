@@ -53,6 +53,9 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
     if n_src is None:
         n_src = X.shape[2]
 
+    # U normalized by number of frequencies is used
+    U_mean = U / n_freq
+
     # initialize the demixing matrices
     if W0 is None:
         W = np.array([np.eye(n_chan, n_chan) for f in range(n_freq)], dtype=X.dtype)
@@ -101,19 +104,19 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
     def P_update(Y, P):
         # The sources powers summed over frequencies
         # shape: (n_frames, n_src)
-        P[:,:] = np.linalg.norm(Y, axis=1)
+        P[:,:] = np.linalg.norm(Y, axis=1) / n_freq
 
     def R_no_nmf_update(Y, R_all, P):
         # compute activations for sources not tied to NMF
-        R_all[:,n_src:] = P[:,n_src:] ** 2 / n_freq
+        R_all[:,n_src:] = P[:,n_src:]
 
     def R_update_init(P, U, R, G, zn):
         # Update the activations
         U_hat = np.dot(R, G) + zn[None,:]
         U_hat_I = 1. / U_hat
         R_I = 1. / R
-        num = (np.dot(U * U_hat_I ** 2, G.T))
-        denom = (n_freq * np.dot(U_hat_I, G.T) + sparse_reg)
+        num = (np.dot(U_mean * U_hat_I ** 2, G.T))
+        denom = (np.dot(U_hat_I, G.T) + sparse_reg)
         R *= np.sqrt(num  / denom)
         R[R < machine_epsilon] = machine_epsilon
 
@@ -122,23 +125,23 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
         U_hat = np.dot(R, G) + zn[None,:]
         U_hat_I = 1. / U_hat
         R_I = 1. / R
-        num = (0.5 * P[:,:n_src] * R_I ** 1.5 + np.dot(U * U_hat_I ** 2, G.T))
-        denom = (0.5 * n_freq * R_I + n_freq * np.dot(U_hat_I, G.T) + sparse_reg)
+        num = (0.5 * P[:,:n_src] * R_I ** 1.5 + np.dot(U_mean * U_hat_I ** 2, G.T))
+        denom = (0.5 * R_I + np.dot(U_hat_I, G.T) + sparse_reg)
         R *= np.sqrt(num  / denom)
         R[R < machine_epsilon] = machine_epsilon
 
     def G_update(U, R, G, zn):
         U_hat = np.dot(R, G) + zn[None,:]
         U_hat_I = 1. / U_hat
-        num = np.dot(R.T, U * U_hat_I ** 2)
-        denom = n_freq * np.dot(R.T, U_hat_I)
+        num = np.dot(R.T, U_mean * U_hat_I ** 2)
+        denom = np.dot(R.T, U_hat_I)
         G *= np.sqrt(num  / denom)
         G[G < machine_epsilon] = machine_epsilon
 
     def cost_function(Y, U, R, G, W):
         U_hat = np.dot(R[:,:G.shape[0]], G)
-        cf = - 2 * Y.shape[0] * np.sum(np.linalg.slogdet(W)[1])
-        cf += np.sum(0.5 * Y.shape[1] * np.log(R) + 0.5 * np.linalg.norm(Y, axis=1) / R ** 0.5)
+        cf = - Y.shape[0] * np.sum([np.linalg.slogdet(WW)[1] for WW in W])
+        cf += np.sum(0.5 * Y.shape[1] * np.log(R) + np.linalg.norm(Y, axis=1) / R ** 0.5)
         cf += np.sum(Y.shape[1] * np.log(U_hat) + U / U_hat)
         return cf
 
@@ -157,14 +160,16 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
     for epoch in range(n_nmf_pre_iter):
 
         # Update the activations
-        R_update_init(P, U, R, G, zn)
+        R_update(P, U, R, G, zn)
 
         # Update the gains
         G_update(U, R, G, zn)
 
+        '''
         norm = np.mean(P[:,:n_src] ** 2, axis=0, keepdims=True) / np.mean(R, axis=0, keepdims=True)
         R *= norm
         G /= norm.T
+        '''
 
         if epoch % 40 == 0:
             cost_func_list.append(cost_function(Y, U, R_all, G, W))
@@ -180,6 +185,10 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
                 callback(Y * np.conj(z[None,:,:]))
             else:
                 callback(Y, extra=[W,G,R,X,U])
+
+        if epoch % 5 == 0:
+            cost_func_list.append(cost_function(Y, U, R_all, G, W))
+            print('epoch:', epoch, 'cost function ==', cost_func_list[-1])
 
         # Compute Auxiliary Variable
         # shape: (n_freq, n_src, n_mic, n_mic)
@@ -210,10 +219,6 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
 
         # compute activations for sources not tied to NMF
         R_no_nmf_update(Y, R_all, P)
-
-        if epoch % 5 == 0:
-            cost_func_list.append(cost_function(Y, U, R_all, G, W))
-            print('epoch:', epoch, 'cost function ==', cost_func_list[-1])
 
         if (epoch + 1) % n_iva_sub_iter != 0:
             continue

@@ -76,7 +76,7 @@ if __name__ == '__main__':
     #absorption, max_order = 0.45, 12  # RT60 == 0.2
     n_sources = 14
     n_mics = 4
-    n_sources_target = 4  # the determined case
+    n_sources_target = 3  # the determined case
     n_blinkies = 40
 
     # set the source powers, the first one is half
@@ -93,8 +93,8 @@ if __name__ == '__main__':
 
     # algorithm parameters
     n_iter = 101
-    n_nmf_pre_iter = 100
-    n_nmf_sub_iter = 5
+    n_nmf_pre_iter = 20
+    n_nmf_sub_iter = 20
     n_iva_sub_iter = 1
     use_amplitude = False
     estimate_noise = False
