@@ -94,10 +94,6 @@ if __name__ == '__main__':
     # algorithm parameters
     n_iter = 101
     n_nmf_sub_iter = 20
-    use_amplitude = False
-    estimate_noise = False
-
-    n_iter_iva = n_iter
 
     # Geometry of the room and location of sources and microphones
     room_dim = np.array([10, 7.5, 3])
@@ -243,22 +239,19 @@ if __name__ == '__main__':
     X_mics =  X_all[:,:,:n_mics]
     U_blinky = np.sum(np.abs(X_all[:,:,n_mics:]) ** 2, axis=1)  # shape: (n_frames, n_blinkies)
 
-    if use_amplitude:
-        U_blinky = np.sqrt(U_blinky)
-
     #X_mics /= np.linalg.norm(X_mics) / np.prod(X_mics.shape)
     #U_blinky /= np.linalg.norm(U_blinky) / np.prod(U_blinky.shape)
 
     # Run BSS
     if args.algo == 'auxiva':
         # Run AuxIVA
-        Y = pra.bss.auxiva(X_mics, n_iter=n_iter_iva, proj_back=True,
+        Y = pra.bss.auxiva(X_mics, n_iter=n_iter, proj_back=True,
                 #callback=convergence_callback,
                 )
     if args.algo == 'gauss-auxiva':
         # Run AuxIVA
         f_contrast = { 'f' : (lambda r : 0.5 * r ** 2), 'df' : (lambda r : r) }
-        Y = pra.bss.auxiva(X_mics, n_iter=n_iter_iva, proj_back=True,
+        Y = pra.bss.auxiva(X_mics, n_iter=n_iter, proj_back=True,
                 f_contrast=f_contrast,
                 #callback=convergence_callback,
                 )
@@ -273,7 +266,6 @@ if __name__ == '__main__':
                 n_iter=n_iter,
                 n_nmf_sub_iter=n_nmf_sub_iter,
                 seed=0,
-                estimate_noise=estimate_noise,
                 #callback=convergence_callback,
                 return_filters=True)
 
