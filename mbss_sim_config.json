@@ -28,15 +28,12 @@
 
   "algorithm_kwargs" : {
     "blinkiva" : {
-      "n_iter" : 300,
-      "n_nmf_pre_iter" : 50000,
-      "n_nmf_sub_iter" : 10,
-      "n_iva_sub_iter" : 1,
-      "estimate_noise" : false,
+      "n_iter" : 100,
+      "n_nmf_sub_iter" : 20,
       "proj_back" : true
     },
     "auxiva" : {
-      "n_iter" : 300,
+      "n_iter" : 100,
       "proj_back" : true
     }
   }
