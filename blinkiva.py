@@ -47,8 +47,7 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
     n_frames, n_freq, n_chan = X.shape
     _, n_blink = U.shape
 
-    if _ != n_frames:
-        raise ValueError('The microphones and blinky signals should have the same number of frames')
+    assert n_frames == _, 'Microphones and blinkies do not have the same number of frames ({} != {})'.format(n_frames, _)
 
     # default to determined case
     if n_src is None:
@@ -72,7 +71,7 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
     R = R_all[:,:n_src]  # subset tied to NMF of blinkies
     '''
     R[:,:] = np.ones((n_frames, n_src))
-    #R[:,:] = np.sum(np.abs(X) ** 2, axis=1)
+    R[:,:] = np.sum(np.abs(X) ** 2, axis=1)
     G = np.ones((n_src, n_blink)) * U.mean(axis=0, keepdims=True) / n_src
     '''
     if seed is not None:
@@ -81,67 +80,82 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
 
     R[:,:] = 0.1 + 0.9 * np.random.rand(n_frames, n_src)
     G = 0.1 + 0.9 * np.random.rand(n_src, n_blink)
-    R *= np.linalg.norm(U) / np.linalg.norm(R)
+    R *= np.sum(np.abs(X[:,:,:n_src]) ** 2, axis=(0,1)) / R.sum(axis=0)
+    U_hat = np.dot(R, G)
+    G *= np.mean(U_hat) / np.mean(G)
 
     if seed is not None:
         np.random.set_state(rng_state)
-
 
     if estimate_noise:
         zn = np.ones(n_blink) * np.min(U, axis=0)
     else:
         zn = np.zeros(n_blink)
 
-    '''
-    U_hat = np.dot(R, G)
-    norm_fact = np.linalg.norm(U_hat)
-    R *= np.linalg.norm(U) / np.linalg.norm(U_hat)
-    '''
-
-    # Final normalization and demixing
-    norm = np.mean(R, axis=0, keepdims=True)
-    R /= norm
-    G *= norm.T
-    W[:,:,:n_src] /= np.sqrt(norm[None,:,:])
-
     # Compute the demixed output
     def demix(Y, X, W):
         for f in range(n_freq):
             Y[:,f,:] = np.dot(X[:,f,:], np.conj(W[f,:,:]))
 
-    # NMF only
-    for epoch in range(n_nmf_pre_iter):
+    def compute_y_sqnorm(Y):
+        # The sources powers summed over frequencies
+        # shape: (n_frames, n_src)
+        return np.linalg.norm(Y[:,:,:n_src], axis=1) ** 2
 
+    def R_update(P, U, R, G, zn):
         # Update the activations
         U_hat = np.dot(R, G) + zn[None,:]
         U_hat_I = 1. / U_hat
         R_I = 1. / R
-        #R *= np.sqrt( (P * R_I ** 2 + np.dot(U * U_hat_I ** 2, G.T)) / (n_freq * R_I + (n_freq - 1) * np.dot(U_hat_I, G.T)) )
-        R *= np.sqrt( (np.dot(U * U_hat_I ** 2, G.T)) / (np.dot(U_hat_I, G.T) + sparse_reg) )
+        num = (P * R_I ** 2 + np.dot(U * U_hat_I ** 2, G.T))
+        denom = (n_freq * R_I + n_freq * np.dot(U_hat_I, G.T) + sparse_reg)
+        R *= np.sqrt(num  / denom)
         R[R < machine_epsilon] = machine_epsilon
 
-        # Update the gains
+    def R_no_nmf_update(Y, R_all):
+        # compute activations for sources not tied to NMF
+        R_all[:,n_src:] = np.linalg.norm(Y[:,:,n_src:], axis=1) ** 2
+
+    def G_update(U, R, G, zn):
         U_hat = np.dot(R, G) + zn[None,:]
         U_hat_I = 1. / U_hat
-        #G *= np.sqrt( np.dot(R.T, U * U_hat_I ** 2) / ((n_freq - 1) * np.dot(R.T, U_hat_I)) )
-        G *= np.sqrt( np.dot(R.T, U * U_hat_I ** 2) / (np.dot(R.T, U_hat_I)) )
+        num = np.dot(R.T, U * U_hat_I ** 2)
+        denom = n_freq * np.dot(R.T, U_hat_I)
+        G *= np.sqrt(num  / denom)
         G[G < machine_epsilon] = machine_epsilon
 
-        # Update noise gain
-        if estimate_noise:
-            zn *= np.sqrt( np.sum(U * U_hat_I ** 2, axis=0) / np.sum(U_hat_I, axis=0) )
+    def cost_function(Y, U, R, G, W):
+        U_hat = np.dot(R[:,:G.shape[0]], G)
+        cf = - Y.shape[0] * np.sum(np.linalg.slogdet(W)[1])
+        cf += np.sum(Y.shape[1] * np.log(R) + np.linalg.norm(Y, axis=1) ** 2 / R)
+        cf += np.sum(Y.shape[1] * np.log(U_hat) + U / U_hat)
+        return cf
 
-        # enforce normalization of variables
-        norm = np.mean(R, axis=0, keepdims=True)
-        R /= norm
-        G *= norm.T
-        W[:,:,:n_src] /= np.sqrt(norm[None,:,:])
-
-
-    # NMF + IVA
+    cost_func_list = []
 
     # initial demixing
     demix(Y, X, W)
+
+    # compute norm over frequencies
+    P = compute_y_sqnorm(Y)
+
+    # compute activations for sources not tied to NMF
+    R_no_nmf_update(Y, R_all)
+
+    # NMF only
+    for epoch in range(n_nmf_pre_iter):
+
+        # Update the activations
+        R_update(P, U, R, G, zn)
+
+        # Update the gains
+        G_update(U, R, G, zn)
+
+        if epoch % 40 == 0:
+            cost_func_list.append(cost_function(Y, U, R_all, G, W))
+            print('epoch:', epoch, 'cost function ==', cost_func_list[-1])
+
+    # NMF + IVA
 
     for epoch in range(n_iter):
 
@@ -154,7 +168,7 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
 
 
         # compute activations for sources not tied to NMF
-        R_all[:,n_src:] = np.sqrt(np.sum(np.abs(Y[:,:,n_src:] * np.conj(Y[:,:,n_src:])), axis=1))
+        R_no_nmf_update(Y, R_all)
         
         # Compute Auxiliary Variable
         # shape: (n_freq, n_src, n_mic, n_mic)
@@ -180,14 +194,11 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
 
         # The sources powers summed over frequencies
         # shape: (n_frames, n_src)
-        P = np.linalg.norm(Y[:,:,:n_src], axis=1)
+        P = compute_y_sqnorm(Y)
 
-        # enforce normalization of variables
-        norm = 1. / np.sqrt(np.mean(np.abs(Y[:,:,:n_src]), axis=(0,1)))
-        P *= norm[None,:]
-        R *= norm[None,:]
-        G /= norm[:,None]
-        W[:,:,:n_src] *= norm[None,None,:]
+        if epoch % 5 == 0:
+            cost_func_list.append(cost_function(Y, U, R_all, G, W))
+            print('epoch:', epoch, 'cost function ==', cost_func_list[-1])
 
         if (epoch + 1) % n_iva_sub_iter != 0:
             continue
@@ -195,37 +206,20 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
         for sub_epoch in range(n_nmf_sub_iter):
 
             # Update the activations
-            U_hat = np.dot(R, G) + zn[None,:]
-            U_hat_I = 1. / U_hat
-            R_I = 1. / R
-            #R *= np.sqrt( (P * R_I ** 2 + np.dot(U * U_hat_I ** 2, G.T)) / (n_freq * R_I + (n_freq - 1) * np.dot(U_hat_I, G.T) + sparse_reg) )
-            R *= np.sqrt( (P * R_I ** 2 + np.dot(U * U_hat_I ** 2, G.T)) / (R_I + np.dot(U_hat_I, G.T) + sparse_reg) )
-            R[R < machine_epsilon] = machine_epsilon
+            R_update(P, U, R, G, zn)
 
             # Update the gains
-            U_hat = np.dot(R, G) + zn[None,:]
-            U_hat_I = 1. / U_hat
-            #G *= np.sqrt( np.dot(R.T, U * U_hat_I ** 2) / ((n_freq - 1) * np.dot(R.T, U_hat_I)) )
-            G *= np.sqrt( np.dot(R.T, U * U_hat_I ** 2) / (np.dot(R.T, U_hat_I)) )
-            G[G < machine_epsilon] = machine_epsilon
+            G_update(U, R, G, zn)
 
-            # Update noise gain
-            if estimate_noise:
-                zn *= np.sqrt( np.sum(U * U_hat_I ** 2, axis=0) / np.sum(U_hat_I, axis=0) )
-
-
-    '''
-    norm = np.mean(R, axis=0, keepdims=True)
-    R /= norm
-    G *= norm.T
-    W[:,:,:n_src] /= np.sqrt(norm[None,:,:])
-    '''
+    import matplotlib.pyplot as plt
+    plt.semilogy(cost_func_list)
+    plt.show()
 
     if proj_back:
         z = projection_back(Y, X[:,:,0])
         Y *= np.conj(z[None,:,:])
 
     if return_filters:
-        return Y, W, G, R, z
+        return Y, W, G, R, zn
     else:
         return Y

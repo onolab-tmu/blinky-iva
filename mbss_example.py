@@ -48,7 +48,7 @@ from generate_samples import sampling, wav_read_center
 # We concatenate a few samples to make them long enough
 if __name__ == '__main__':
 
-    choices = ['ilrma', 'auxiva', 'blinkiva']
+    choices = ['ilrma', 'auxiva', 'blinkiva', 'gauss-auxiva']
 
     import argparse
     parser = argparse.ArgumentParser(description='Demonstration of blind source separation using IVA or ILRMA.')
@@ -75,9 +75,9 @@ if __name__ == '__main__':
     absorption, max_order = 0.35, 17  # RT60 == 0.3
     #absorption, max_order = 0.45, 12  # RT60 == 0.2
     n_sources = 14
-    n_mics = 6
-    n_sources_target = 4  # the determined case
-    n_blinkies = 40
+    n_mics = 2
+    n_sources_target = 2  # the determined case
+    n_blinkies = 20
 
     # set the source powers, the first one is half
     source_std = np.ones(n_sources_target)
@@ -92,9 +92,9 @@ if __name__ == '__main__':
     win_s = pra.transform.compute_synthesis_window(win_a, framesize // 2)
 
     # algorithm parameters
-    n_iter = 300
-    n_nmf_pre_iter = 50000
-    n_nmf_sub_iter = 10
+    n_iter = 201
+    n_nmf_pre_iter = 0
+    n_nmf_sub_iter = 0
     n_iva_sub_iter = 1
     use_amplitude = False
     estimate_noise = False
@@ -139,7 +139,7 @@ if __name__ == '__main__':
 
     # Place the blinkies regularly in the room (2D plane)
     #blinky_locs = grid_layout([3,5.5], n_blinkies, offset=[1., 1., 0.8])
-    blinky_locs = gm_layout(n_blinkies, target_locs - np.c_[[0., 0., 0.5]], std=[0.7, 0.7, 0.05], seed=987)
+    blinky_locs = gm_layout(n_blinkies, target_locs - np.c_[[0., 0., 0.4]], std=[0.4, 0.4, 0.05], seed=987)
     #blinky_locs = grid_layout(room_dim[:2], n_blinkies, 0.7)
     #blinky_locs = random_layout([1.5,7.,1.], n_blinkies, offset=[0.5, 0.25, 0.8], seed=2)
     #blinky_locs = semi_circle_layout([4.1, 3.755, 0.75], 1.5 * 2 * np.pi / 3, 2., n_blinkies, rot=0.45 * np.pi)
@@ -255,6 +255,13 @@ if __name__ == '__main__':
     if args.algo == 'auxiva':
         # Run AuxIVA
         Y = pra.bss.auxiva(X_mics, n_iter=n_iter_iva, proj_back=True,
+                #callback=convergence_callback,
+                )
+    if args.algo == 'gauss-auxiva':
+        # Run AuxIVA
+        f_contrast = { 'f' : (lambda r : 0.5 * r ** 2), 'df' : (lambda r : r) }
+        Y = pra.bss.auxiva(X_mics, n_iter=n_iter_iva, proj_back=True,
+                f_contrast=f_contrast,
                 #callback=convergence_callback,
                 )
     elif args.algo == 'ilrma':
