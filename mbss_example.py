@@ -75,8 +75,8 @@ if __name__ == '__main__':
     absorption, max_order = 0.35, 17  # RT60 == 0.3
     #absorption, max_order = 0.45, 12  # RT60 == 0.2
     n_sources = 14
-    n_mics = 4
-    n_sources_target = 3  # the determined case
+    n_mics = 5
+    n_sources_target = 2  # the determined case
     n_blinkies = 40
 
     # set the source powers, the first one is half
@@ -93,9 +93,7 @@ if __name__ == '__main__':
 
     # algorithm parameters
     n_iter = 101
-    n_nmf_pre_iter = 20
     n_nmf_sub_iter = 20
-    n_iva_sub_iter = 1
     use_amplitude = False
     estimate_noise = False
 
@@ -271,9 +269,9 @@ if __name__ == '__main__':
             )
     elif args.algo == 'blinkiva':
         # Run BlinkIVA
-        Y, W, G, R, z = blinkiva(X_mics, U_blinky, n_src=n_sources_target,
-                n_iter=n_iter, n_nmf_pre_iter=n_nmf_pre_iter,
-                n_nmf_sub_iter=n_nmf_sub_iter, n_iva_sub_iter=n_iva_sub_iter,
+        Y, W, G, R = blinkiva(X_mics, U_blinky, n_src=n_sources_target,
+                n_iter=n_iter,
+                n_nmf_sub_iter=n_nmf_sub_iter,
                 seed=0,
                 estimate_noise=estimate_noise,
                 #callback=convergence_callback,
@@ -329,7 +327,7 @@ if __name__ == '__main__':
         plt.matshow(U_blinky.T, aspect='auto')
         plt.title('Blinky Data')
         plt.tight_layout(pad=0.5)
-        plt.matshow(np.dot(R, G).T, aspect='auto')
+        plt.matshow(np.dot(R[:,:n_sources_target], G).T, aspect='auto')
         plt.title('NMF approx')
         plt.tight_layout(pad=0.5)
 

@@ -7,16 +7,15 @@ import numpy as np
 
 from pyroomacoustics.bss import projection_back
 
-def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
-        n_iter=20, n_nmf_pre_iter=30, n_nmf_sub_iter=4, n_iva_sub_iter=4,
-        proj_back=True, W0=None, seed=None,
+def blinkiva(X, U, n_src=None, sparse_reg=0.,
+        n_iter=20, n_nmf_sub_iter=4,
+        proj_back=True, W0=None, seed=None, print_cost=False,
         return_filters=False, callback=None):
 
     '''
-    Implementation of AuxIVA algorithm for BSS presented in
+    Implementation of BlinkIVA algorithm for BSS presented by
 
-    N. Ono, *Stable and fast update rules for independent vector analysis based
-    on auxiliary function technique*, Proc. IEEE, WASPAA, 2011.
+    Robin Scheibler, Nobutaka Ono at ICASSP 2019, title to be determined
 
     Parameters
     ----------
@@ -73,56 +72,35 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
     # initialize the parts of NMF
     R_all = np.ones((n_frames, n_chan))
     R = R_all[:,:n_src]  # subset tied to NMF of blinkies
-    '''
-    R[:,:] = np.ones((n_frames, n_src))
-    R[:,:] = np.sum(np.abs(X) ** 2, axis=1)
-    G = np.ones((n_src, n_blink)) * U.mean(axis=0, keepdims=True) / n_src
-    '''
+
     if seed is not None:
         rng_state = np.random.get_state()
         np.random.seed(seed)
 
     R[:,:] = 0.1 + 0.9 * np.random.rand(n_frames, n_src)
     G = 0.1 + 0.9 * np.random.rand(n_src, n_blink)
-    R *= np.sum(np.abs(X[:,:,:n_src]) ** 2, axis=(0,1)) / R.sum(axis=0)
+    R *= np.mean(np.abs(X[:,:,:n_src]) ** 2, axis=(0,1)) / R.sum(axis=0)
     U_hat = np.dot(R, G)
     G *= np.mean(U_hat) / np.mean(G)
 
     if seed is not None:
         np.random.set_state(rng_state)
 
-    if estimate_noise:
-        zn = np.ones(n_blink) * np.min(U, axis=0)
-    else:
-        zn = np.zeros(n_blink)
-
     # Compute the demixed output
-    def demix(Y, X, W):
+    def demix(Y, X, W, P, R_all):
         for f in range(n_freq):
             Y[:,f,:] = np.dot(X[:,f,:], np.conj(W[f,:,:]))
 
-    def P_update(Y, P):
-        # The sources powers summed over frequencies
+        # The sources magnitudes averaged over frequencies
         # shape: (n_frames, n_src)
         P[:,:] = np.linalg.norm(Y, axis=1) / n_freq
 
-    def R_no_nmf_update(Y, R_all, P):
-        # compute activations for sources not tied to NMF
+        # copy activations for sources not tied to NMF
         R_all[:,n_src:] = P[:,n_src:]
 
-    def R_update_init(P, U, R, G, zn):
+    def R_update(P, U, R, G):
         # Update the activations
-        U_hat = np.dot(R, G) + zn[None,:]
-        U_hat_I = 1. / U_hat
-        R_I = 1. / R
-        num = (np.dot(U_mean * U_hat_I ** 2, G.T))
-        denom = (np.dot(U_hat_I, G.T) + sparse_reg)
-        R *= np.sqrt(num  / denom)
-        R[R < machine_epsilon] = machine_epsilon
-
-    def R_update(P, U, R, G, zn):
-        # Update the activations
-        U_hat = np.dot(R, G) + zn[None,:]
+        U_hat = np.dot(R, G)
         U_hat_I = 1. / U_hat
         R_I = 1. / R
         num = (0.5 * P[:,:n_src] * R_I ** 1.5 + np.dot(U_mean * U_hat_I ** 2, G.T))
@@ -130,8 +108,8 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
         R *= np.sqrt(num  / denom)
         R[R < machine_epsilon] = machine_epsilon
 
-    def G_update(U, R, G, zn):
-        U_hat = np.dot(R, G) + zn[None,:]
+    def G_update(U, R, G):
+        U_hat = np.dot(R, G)
         U_hat_I = 1. / U_hat
         num = np.dot(R.T, U_mean * U_hat_I ** 2)
         denom = np.dot(R.T, U_hat_I)
@@ -140,7 +118,7 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
 
     def cost_function(Y, U, R, G, W):
         U_hat = np.dot(R[:,:G.shape[0]], G)
-        cf = - Y.shape[0] * np.sum([np.linalg.slogdet(WW)[1] for WW in W])
+        cf = - np.sum(np.linalg.slogdet(W)[1])
         cf += np.sum(0.5 * Y.shape[1] * np.log(R) + np.linalg.norm(Y, axis=1) / R ** 0.5)
         cf += np.sum(Y.shape[1] * np.log(U_hat) + U / U_hat)
         return cf
@@ -148,35 +126,9 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
     cost_func_list = []
 
     # initial demixing
-    demix(Y, X, W)
-
-    # compute norm over frequencies
-    P_update(Y, P)
-
-    # compute activations for sources not tied to NMF
-    R_no_nmf_update(Y, R_all, P)
-
-    # NMF only
-    for epoch in range(n_nmf_pre_iter):
-
-        # Update the activations
-        R_update(P, U, R, G, zn)
-
-        # Update the gains
-        G_update(U, R, G, zn)
-
-        '''
-        norm = np.mean(P[:,:n_src] ** 2, axis=0, keepdims=True) / np.mean(R, axis=0, keepdims=True)
-        R *= norm
-        G /= norm.T
-        '''
-
-        if epoch % 40 == 0:
-            cost_func_list.append(cost_function(Y, U, R_all, G, W))
-            print('epoch:', epoch, 'cost function ==', cost_func_list[-1])
+    demix(Y, X, W, P, R_all)
 
     # NMF + IVA
-
     for epoch in range(n_iter):
 
         if callback is not None and epoch % 10 == 0:
@@ -186,17 +138,29 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
             else:
                 callback(Y, extra=[W,G,R,X,U])
 
-        if epoch % 5 == 0:
+        if print_cost and epoch % 5 == 0:
             cost_func_list.append(cost_function(Y, U, R_all, G, W))
             print('epoch:', epoch, 'cost function ==', cost_func_list[-1])
+
+        # several subiteration of NMF
+        for sub_epoch in range(n_nmf_sub_iter):
+
+            # Update the activations
+            R_update(P, U, R, G)
+
+            # Update the gains
+            G_update(U, R, G)
 
         # Compute Auxiliary Variable
         # shape: (n_freq, n_src, n_mic, n_mic)
         denom = 2 * P * R_all ** 0.5
-        V = np.mean((X[:,:,None,:,None] / (1e-10 + denom[:,None,:,None,None])) * np.conj(X[:,:,None,None,:]), axis=0)
+        V = np.mean(
+                (X[:,:,None,:,None] / (1e-10 + denom[:,None,:,None,None]))
+                * np.conj(X[:,:,None,None,:]),
+                axis=0,
+                )
 
-        # Update now the demixing matrix
-        #for s in range(n_src):
+        # Update the demixing matrices
         for s in range(n_chan):
 
             # only update the demixing matrices where there is signal
@@ -211,25 +175,7 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
             P2 = np.sum(V[I_up,s,:,:] * W[I_up,None,:,s], axis=-1)
             W[I_up,:,s] /= np.sqrt(np.sum(P1 * P2, axis=1))[:,None]
 
-        demix(Y, X, W)
-
-        # The sources powers summed over frequencies
-        # shape: (n_frames, n_src)
-        P_update(Y, P)
-
-        # compute activations for sources not tied to NMF
-        R_no_nmf_update(Y, R_all, P)
-
-        if (epoch + 1) % n_iva_sub_iter != 0:
-            continue
-
-        for sub_epoch in range(n_nmf_sub_iter):
-
-            # Update the activations
-            R_update(P, U, R, G, zn)
-
-            # Update the gains
-            G_update(U, R, G, zn)
+        demix(Y, X, W, P, R_all)
 
     import matplotlib.pyplot as plt
     plt.semilogy(cost_func_list)
@@ -240,6 +186,6 @@ def blinkiva(X, U, n_src=None, sparse_reg=0., estimate_noise=False,
         Y *= np.conj(z[None,:,:])
 
     if return_filters:
-        return Y, W, G, R, zn
+        return Y, W, G, R_all
     else:
         return Y
