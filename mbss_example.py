@@ -75,9 +75,9 @@ if __name__ == '__main__':
     absorption, max_order = 0.35, 17  # RT60 == 0.3
     #absorption, max_order = 0.45, 12  # RT60 == 0.2
     n_sources = 14
-    n_mics = 2
-    n_sources_target = 2  # the determined case
-    n_blinkies = 20
+    n_mics = 4
+    n_sources_target = 4  # the determined case
+    n_blinkies = 40
 
     # set the source powers, the first one is half
     source_std = np.ones(n_sources_target)
@@ -92,9 +92,9 @@ if __name__ == '__main__':
     win_s = pra.transform.compute_synthesis_window(win_a, framesize // 2)
 
     # algorithm parameters
-    n_iter = 201
-    n_nmf_pre_iter = 0
-    n_nmf_sub_iter = 0
+    n_iter = 101
+    n_nmf_pre_iter = 100
+    n_nmf_sub_iter = 5
     n_iva_sub_iter = 1
     use_amplitude = False
     estimate_noise = False
