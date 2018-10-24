@@ -169,12 +169,12 @@ if __name__ == '__main__':
                 plt.tight_layout(pad=0.01)
 
                 plt.subplots_adjust(top=0.9)
-                g.fig.suptitle('\# blinkies={}, RT60={}, SINR={}'.format(
-                    parameters['n_blinkies'], rt60, sinr
+                tit = g.fig.suptitle('\# blinkies/source={}, RT60={}, SINR={}'.format(
+                    parameters['n_blinkies_per_target'], rt60, sinr
                     ))
 
                 fig_fn = fn_tmp.format(rt60=rt60, sinr=sinr, metric=metric)
-                plt.savefig(fig_fn, bbox_extra_artists=(leg,), bbox_inches='tight')
+                plt.savefig(fig_fn, bbox_extra_artists=(tit, leg,), bbox_inches='tight')
 
     if plot_flag:
         plt.show()

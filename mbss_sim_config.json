@@ -29,7 +29,7 @@
   "algorithm_kwargs" : {
     "blinkiva" : {
       "n_iter" : 100,
-      "n_nmf_sub_iter" : 20,
+      "n_nmf_sub_iter_per_target" : 7,
       "proj_back" : true
     },
     "auxiva" : {
