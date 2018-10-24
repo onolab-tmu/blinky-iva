@@ -77,7 +77,7 @@ if __name__ == '__main__':
     n_sources = 14
     n_mics = 5
     n_sources_target = 2  # the determined case
-    n_blinkies = 40
+    n_blinkies = 20
 
     # set the source powers, the first one is half
     source_std = np.ones(n_sources_target)
@@ -93,7 +93,7 @@ if __name__ == '__main__':
 
     # algorithm parameters
     n_iter = 101
-    n_nmf_sub_iter = 20
+    n_nmf_sub_iter = 10
 
     # Geometry of the room and location of sources and microphones
     room_dim = np.array([10, 7.5, 3])
