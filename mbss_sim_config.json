@@ -4,7 +4,7 @@
   "n_repeat" : 10,
   "seed" : 0,
   "n_targets_list" : [2,3,4],
-  "n_mics_list" : [3,4,5,6],
+  "n_mics_list" : [2,3,4,5,6,7],
   "rt60_list" : {
     "0.2" : { "max_order" : 12, "absorption" : 0.45 },
     "0.3" : { "max_order" : 17, "absorption" : 0.35 }
@@ -16,7 +16,7 @@
   "room_dim" : [10, 7.5, 3],
   "weak_source_var" : 0.25,
   "n_interferers" : 10,
-  "n_blinkies" : 40,
+  "n_blinkies_per_target" : 10,
   "blinky_geometry" : "gm",
   "ref_mic" : 0,
   "dir" : "data",

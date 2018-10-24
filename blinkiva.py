@@ -177,10 +177,6 @@ def blinkiva(X, U, n_src=None, sparse_reg=0.,
 
         demix(Y, X, W, P, R_all)
 
-    import matplotlib.pyplot as plt
-    plt.semilogy(cost_func_list)
-    plt.show()
-
     if proj_back:
         z = projection_back(Y, X[:,:,0])
         Y *= np.conj(z[None,:,:])

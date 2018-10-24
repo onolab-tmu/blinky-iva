@@ -62,7 +62,7 @@ def one_loop(args):
     snr = parameters['snr']
 
     n_interferers = parameters['n_interferers']
-    n_blinkies = parameters['n_blinkies']
+    n_blinkies = parameters['n_blinkies_per_target'] * n_targets
     ref_mic = parameters['ref_mic']
     room_dim = np.array(parameters['room_dim'])
 
