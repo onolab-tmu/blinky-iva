@@ -62,7 +62,7 @@ def one_loop(args):
     snr = parameters['snr']
 
     n_interferers = parameters['n_interferers']
-    n_blinkies = parameters['n_blinkies_per_target'] * n_targets
+    n_blinkies = parameters['n_blinkies']
     ref_mic = parameters['ref_mic']
     room_dim = np.array(parameters['room_dim'])
 
@@ -217,15 +217,11 @@ def one_loop(args):
                     )
 
         elif name == 'blinkiva':
-            # The number of NMF sub-iterations is proportional to the number of sources
-            mod_kwargs = kwargs.copy()
-            mod_kwargs['n_nmf_sub_iter'] = (n_targets - 1) * mod_kwargs.pop('n_nmf_sub_iter_per_target')
-
             # Run BlinkIVA
             Y = blinkiva(
                     X_mics, U_blinky, n_src=n_targets,
                     callback=cb,
-                    **mod_kwargs,
+                    **kwargs,
                     )
 
         else:
