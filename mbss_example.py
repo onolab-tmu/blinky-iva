@@ -298,7 +298,7 @@ if __name__ == '__main__':
 
     elif args.algo == 'blink-aux-iva':
         # Run BlinkIVA
-        Y, W, G, R = blinkiva_gauss(X_mics, U_blinky, n_src=n_sources_target,
+        Y, W, G, R = blinkiva(X_mics, U_blinky, n_src=n_sources_target,
                 n_iter=20,
                 n_nmf_sub_iter=n_nmf_sub_iter,
                 seed=0,
@@ -306,7 +306,7 @@ if __name__ == '__main__':
                 #callback=convergence_callback,
                 return_filters=True)
 
-        Y = auxiva_gauss(X_mics, W0=W, n_iter=n_iter - 20, proj_back=True)
+        Y = auxiva(X_mics, W0=W, n_iter=n_iter - 20, proj_back=True)
 
     # Run iSTFT
     y = pra.transform.synthesis(
