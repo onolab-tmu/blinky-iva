@@ -306,7 +306,7 @@ if __name__ == '__main__':
                 #callback=convergence_callback,
                 return_filters=True)
 
-        Y = auxiva(X_mics, W0=W, n_iter=n_iter - 20, proj_back=True)
+        Y = pra.bss.auxiva(X_mics, W0=W, n_iter=n_iter - 20, proj_back=True)
 
     # Run iSTFT
     y = pra.transform.synthesis(
