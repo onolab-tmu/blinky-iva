@@ -43,12 +43,18 @@ from mir_eval.separation import bss_eval_sources
 
 from routines import PlaySoundGUI, grid_layout, semi_circle_layout, random_layout, gm_layout
 from blinkiva import blinkiva
+from blinkiva_gauss import blinkiva_gauss
+from auxiva_gauss import auxiva_gauss
 from generate_samples import sampling, wav_read_center
 
 # We concatenate a few samples to make them long enough
 if __name__ == '__main__':
 
-    choices = ['ilrma', 'auxiva', 'blinkiva', 'gauss-auxiva']
+    choices = [
+            'ilrma', 'auxiva', 'blinkiva',
+            'auxiva-gauss', 'blinkiva-gauss',
+            'blink-aux-iva', 'blink-aux-iva-gauss',
+            ]
 
     import argparse
     parser = argparse.ArgumentParser(description='Demonstration of blind source separation using IVA or ILRMA.')
@@ -77,7 +83,7 @@ if __name__ == '__main__':
     n_sources = 14
     n_mics = 5
     n_sources_target = 2  # the determined case
-    n_blinkies = 20
+    n_blinkies = 40
 
     # set the source powers, the first one is half
     source_std = np.ones(n_sources_target)
@@ -93,7 +99,7 @@ if __name__ == '__main__':
 
     # algorithm parameters
     n_iter = 101
-    n_nmf_sub_iter = 10
+    n_nmf_sub_iter = 5
 
     # Geometry of the room and location of sources and microphones
     room_dim = np.array([10, 7.5, 3])
@@ -248,11 +254,9 @@ if __name__ == '__main__':
         Y = pra.bss.auxiva(X_mics, n_iter=n_iter, proj_back=True,
                 #callback=convergence_callback,
                 )
-    if args.algo == 'gauss-auxiva':
+    if args.algo == 'auxiva-gauss':
         # Run AuxIVA
-        f_contrast = { 'f' : (lambda r : 0.5 * r ** 2), 'df' : (lambda r : r) }
-        Y = pra.bss.auxiva(X_mics, n_iter=n_iter, proj_back=True,
-                f_contrast=f_contrast,
+        Y = auxiva_gauss(X_mics, n_iter=n_iter, proj_back=True,
                 #callback=convergence_callback,
                 )
     elif args.algo == 'ilrma':
@@ -266,8 +270,43 @@ if __name__ == '__main__':
                 n_iter=n_iter,
                 n_nmf_sub_iter=n_nmf_sub_iter,
                 seed=0,
+                print_cost=True,
                 #callback=convergence_callback,
                 return_filters=True)
+
+    elif args.algo == 'blinkiva-gauss':
+        # Run BlinkIVA
+        Y, W, G, R = blinkiva_gauss(X_mics, U_blinky, n_src=n_sources_target,
+                n_iter=n_iter,
+                n_nmf_sub_iter=n_nmf_sub_iter,
+                seed=0,
+                print_cost=True,
+                #callback=convergence_callback,
+                return_filters=True)
+
+    elif args.algo == 'blink-aux-iva-gauss':
+        # Run BlinkIVA
+        Y, W, G, R = blinkiva_gauss(X_mics, U_blinky, n_src=n_sources_target,
+                n_iter=20,
+                n_nmf_sub_iter=n_nmf_sub_iter,
+                seed=0,
+                print_cost=True,
+                #callback=convergence_callback,
+                return_filters=True)
+
+        Y = auxiva_gauss(X_mics, W0=W, n_iter=n_iter - 20, proj_back=True)
+
+    elif args.algo == 'blink-aux-iva':
+        # Run BlinkIVA
+        Y, W, G, R = blinkiva_gauss(X_mics, U_blinky, n_src=n_sources_target,
+                n_iter=20,
+                n_nmf_sub_iter=n_nmf_sub_iter,
+                seed=0,
+                print_cost=True,
+                #callback=convergence_callback,
+                return_filters=True)
+
+        Y = auxiva_gauss(X_mics, W0=W, n_iter=n_iter - 20, proj_back=True)
 
     # Run iSTFT
     y = pra.transform.synthesis(
@@ -313,7 +352,7 @@ if __name__ == '__main__':
 
     plt.tight_layout(pad=0.5)
 
-    room.plot(img_order=0)
+    #room.plot(img_order=0)
 
     if args.algo == 'blinkiva':
         plt.matshow(U_blinky.T, aspect='auto')
