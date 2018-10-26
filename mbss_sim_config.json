@@ -21,19 +21,20 @@
   "ref_mic" : 0,
   "dir" : "data",
   "monitor_convergence" : false,
+  "use_pre_emphasis" : false,
 
   "stft_params" : {
     "framesize" : 4096
   },
 
   "algorithm_kwargs" : {
-    "blinkiva" : {
-      "n_iter" : 100,
+    "blinkiva-gauss" : {
+      "n_iter" : 50,
       "n_nmf_sub_iter" : 20,
       "proj_back" : true
     },
     "auxiva" : {
-      "n_iter" : 100,
+      "n_iter" : 50,
       "proj_back" : true
     }
   }

@@ -165,10 +165,10 @@ def blinkiva(X, U, n_src=None, sparse_reg=0.,
         # Compute Auxiliary Variable
         # shape: (n_freq, n_src, n_mic, n_mic)
         denom = 4 * P * R_all ** 0.5  # / n_freq  # when I add this, separation improves a lot!
-        #denom = 4 * R_all ** 0.5  # / n_freq  # when I add this, separation improves a lot!
-        #denom = 4 * R_all  # / n_freq  # when I add this, separation improves a lot!
+        denom[denom < 1.] = 1.
+
         V = np.mean(
-                (X[:,:,None,:,None] / (1e-15 + denom[:,None,:,None,None]))
+                (X[:,:,None,:,None] / denom[:,None,:,None,None])
                 * np.conj(X[:,:,None,None,:]),
                 axis=0,
                 )
@@ -177,17 +177,14 @@ def blinkiva(X, U, n_src=None, sparse_reg=0.,
         # Update the demixing matrices
         for s in range(n_chan):
 
-            # only update the demixing matrices where there is signal
-            I_up = np.max(V[:,s,:,:], axis=(1,2)) > 1e-15
-
             W_H = np.conj(np.swapaxes(W, 1, 2))
-            WV = np.matmul(W_H[I_up], V[I_up,s,:,:])
+            WV = np.matmul(W_H, V[:,s,:,:])
             rhs = I[None,:,s][[0] * WV.shape[0],:]
-            W[I_up,:,s] = np.linalg.solve(WV, rhs)
+            W[:,:,s] = np.linalg.solve(WV, rhs)
 
-            P1 = np.conj(W[I_up,:,s])
-            P2 = np.sum(V[I_up,s,:,:] * W[I_up,None,:,s], axis=-1)
-            W[I_up,:,s] /= np.sqrt(np.sum(P1 * P2, axis=1))[:,None]
+            P1 = np.conj(W[:,:,s])
+            P2 = np.sum(V[:,s,:,:] * W[:,None,:,s], axis=-1)
+            W[:,:,s] /= np.sqrt(np.sum(P1 * P2, axis=1))[:,None]
 
         demix(Y, X, W, P, R_all)
 
@@ -197,11 +194,6 @@ def blinkiva(X, U, n_src=None, sparse_reg=0.,
         W *= np.sqrt(lmb[None,None,:])
         P *= np.sqrt(lmb[None,:])
         G /= lmb[:n_src,None]
-
-    import matplotlib.pyplot as plt
-    plt.plot(R[:,0] * n_freq)
-    plt.plot(P[:,0])
-    import pdb; pdb.set_trace()
 
     if proj_back:
         z = projection_back(Y, X[:,:,0])

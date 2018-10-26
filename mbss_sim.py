@@ -8,6 +8,7 @@ import rrtools
 
 from routines import PlaySoundGUI, grid_layout, semi_circle_layout, random_layout, gm_layout
 from blinkiva import blinkiva
+from blinkiva_gauss import blinkiva_gauss
 from generate_samples import sampling, wav_read_center
 
 # find the absolute path to this file
@@ -29,6 +30,7 @@ def one_loop(args):
 
     from routines import semi_circle_layout, random_layout, gm_layout
     from blinkiva import blinkiva
+    from blinkiva_gauss import blinkiva_gauss
     from generate_samples import wav_read_center
 
     n_targets, n_mics, rt60, sinr, wav_files, seed = args
@@ -158,6 +160,11 @@ def one_loop(args):
     # START BSS
     ###########
 
+    # pre-emphasis on blinky signals
+    if parameters['use_pre_emphasis']:
+        mix[n_mics:,:-1] = np.diff(mix[n_mics:,:], axis=1)
+        mix[n_mics:,-1] = 0.
+
     # shape: (n_frames, n_freq, n_mics)
     X_all = pra.transform.analysis(
             mix.T,
@@ -172,7 +179,7 @@ def one_loop(args):
         from mir_eval.separation import bss_eval_sources
         y = pra.transform.synthesis(Y, framesize, framesize // 2, win=win_s,)
 
-        if algo_name != 'blinkiva':
+        if not algo_name.startswith('blinkiva'):
             new_ord = np.argsort(np.std(y, axis=0))[::-1]
             y = y[:,new_ord]
 
@@ -219,6 +226,14 @@ def one_loop(args):
         elif name == 'blinkiva':
             # Run BlinkIVA
             Y = blinkiva(
+                    X_mics, U_blinky, n_src=n_targets,
+                    callback=cb,
+                    **kwargs,
+                    )
+
+        elif name == 'blinkiva-gauss':
+            # Run BlinkIVA
+            Y = blinkiva_gauss(
                     X_mics, U_blinky, n_src=n_targets,
                     callback=cb,
                     **kwargs,
