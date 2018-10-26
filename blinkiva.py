@@ -9,7 +9,7 @@ from pyroomacoustics.bss import projection_back
 
 def blinkiva(X, U, n_src=None, sparse_reg=0.,
         n_iter=20, n_nmf_sub_iter=4,
-        proj_back=True, W0=None, seed=None, print_cost=False,
+        proj_back=True, W0=None, R0=None, seed=None, print_cost=False,
         return_filters=False, callback=None):
 
     '''
@@ -69,19 +69,23 @@ def blinkiva(X, U, n_src=None, sparse_reg=0.,
     V = np.zeros((n_freq, n_chan, n_chan, n_chan), dtype=X.dtype)
     P = np.zeros((n_frames, n_chan))
 
-    # initialize the parts of NMF
-    R_all = np.ones((n_frames, n_chan))
-    R = R_all[:,:n_src]  # subset tied to NMF of blinkies
-
     if seed is not None:
         rng_state = np.random.get_state()
         np.random.seed(seed)
 
-    R[:,:] = 0.1 + 0.9 * np.random.rand(n_frames, n_src)
+    # initialize the parts of NMF
+    if R0 is None:
+        R_all = np.ones((n_frames, n_chan))
+        R = R_all[:,:n_src]  # subset tied to NMF of blinkies
+
+        R[:,:] = 0.1 + 0.9 * np.random.rand(n_frames, n_src)
+        R *= np.mean(np.abs(X[:,:,:n_src]) ** 2, axis=(0,1)) / R.sum(axis=0)
+    else:
+        R_all = R0.copy()
+        R = R_all[:,:n_src]  # subset tied to NMF of blinkies
+
     G = 0.1 + 0.9 * np.random.rand(n_src, n_blink)
-    R *= np.mean(np.abs(X[:,:,:n_src]) ** 2, axis=(0,1)) / R.sum(axis=0)
-    U_hat = np.dot(R, G)
-    G *= np.mean(U_hat) / np.mean(G)
+    G *= np.mean(U_mean) / np.mean(G)
 
     if seed is not None:
         np.random.set_state(rng_state)
@@ -169,6 +173,7 @@ def blinkiva(X, U, n_src=None, sparse_reg=0.,
                 axis=0,
                 )
 
+        
         # Update the demixing matrices
         for s in range(n_chan):
 
@@ -193,6 +198,10 @@ def blinkiva(X, U, n_src=None, sparse_reg=0.,
         P *= np.sqrt(lmb[None,:])
         G /= lmb[:n_src,None]
 
+    import matplotlib.pyplot as plt
+    plt.plot(R[:,0] * n_freq)
+    plt.plot(P[:,0])
+    import pdb; pdb.set_trace()
 
     if proj_back:
         z = projection_back(Y, X[:,:,0])
