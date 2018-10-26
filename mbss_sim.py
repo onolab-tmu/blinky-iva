@@ -95,7 +95,7 @@ def one_loop(args):
 
     elif parameters['blinky_geometry'] == 'grid':
         ''' Placed on a regular grid, with a little bit of noise added '''
-        blinky_locs = grid_layout([2.5,4.5], n_blinkies, offset=[1.25, 1.5, 0.7])
+        blinky_locs = grid_layout([2.5,4.5], n_blinkies, offset=[1.25, 1.5, 0.5])
         blinky_locs += np.random.randn(*blinky_locs.shape) * 0.025  # few centimeters
 
     else:
