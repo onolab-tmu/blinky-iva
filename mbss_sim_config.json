@@ -21,7 +21,7 @@
   "ref_mic" : 0,
   "dir" : "data",
   "monitor_convergence" : false,
-  "use_pre_emphasis" : false,
+  "use_pre_emphasis" : true,
 
   "stft_params" : {
     "framesize" : 4096
