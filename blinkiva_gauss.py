@@ -9,7 +9,7 @@ from pyroomacoustics.bss import projection_back
 
 def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
         n_iter=20, n_nmf_sub_iter=4,
-        proj_back=True, W0=None, seed=None,
+        proj_back=True, W0=None, R0=None, seed=None,
         print_cost=False,
         return_filters=False, callback=None):
 
@@ -75,17 +75,17 @@ def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
     # initialize the parts of NMF
     R_all = np.ones((n_frames, n_chan))
     R = R_all[:,:n_src]  # subset tied to NMF of blinkies
-    '''
-    R[:,:] = np.ones((n_frames, n_src))
-    #R[:,:] = np.sum(np.abs(X) ** 2, axis=1)
-    G = np.ones((n_src, n_blink)) * U.mean(axis=0, keepdims=True) / n_src
-    '''
+
     if seed is not None:
         rng_state = np.random.get_state()
         np.random.seed(seed)
 
-    R[:,:] = 0.1 + 0.9 * np.random.rand(n_frames, n_src)
-    R /= np.mean(R, axis=0, keepdims=True)
+    if R0 is None:
+        R[:,:] = 0.1 + 0.9 * np.random.rand(n_frames, n_src)
+        R /= np.mean(R, axis=0, keepdims=True)
+    else:
+        R[:,:] = R0
+
     G = 0.1 + 0.9 * np.random.rand(n_src, n_blink)
     U_hat = np.dot(R, G)
     G *= np.sum(U_mean, axis=0, keepdims=True) / np.sum(U_hat, axis=0, keepdims=True)
@@ -93,15 +93,21 @@ def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
     if seed is not None:
         np.random.set_state(rng_state)
 
-    def cost_nmf(U, G, R):
-        U_hat = np.dot(R, G)
-        return np.sum(np.log(U_hat) + U / U_hat / 2)
-
-    def cost_iva(Y, W, R):
+    def cost(Y, W, R, G):
         pwr = np.linalg.norm(Y, axis=1) ** 2
-        cf = -2 * Y.shape[0] * np.sum(np.linalg.slogdet(W)[1])
-        cf += np.sum(Y.shape[1] * np.log(R) + pwr / R)
-        return cf
+        cf1 = -2 * Y.shape[0] * np.sum(np.linalg.slogdet(W)[1])
+        cf2 = np.sum(Y.shape[1] * np.log(R) + pwr / R)
+        U_hat = np.dot(R[:,:n_src], G)
+        cf3 = np.sum(np.log(U_hat) + U / U_hat / 2)
+        return { 'iva' : cf1 + cf2, 'nmf' : cf2 + cf3, 'blinkiva' : cf1 + cf2 + cf3 }
+
+    def rescale(W, P, R, G):
+        # Fix the scale of all variables
+        lmb = 1. / np.mean(R, axis=0)
+        R *= lmb[None,:]
+        P *= lmb[None,:]
+        W *= np.sqrt(lmb[None,None,:])
+        G /= lmb[:G.shape[0],None]
 
     # Compute the demixed output
     def demix(Y, X, W, P, R_all):
@@ -125,6 +131,7 @@ def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
     for epoch in range(n_iter):
 
         if callback is not None and epoch % 10 == 0:
+
             if proj_back:
                 z = projection_back(Y, X[:,:,0])
                 callback(Y * np.conj(z[None,:,:]))
@@ -132,8 +139,8 @@ def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
                 callback(Y, extra=[W,G,R,X,U])
 
         if print_cost and epoch % 10 == 0:
-            cost_joint_list.append(cost_nmf(U, G, R) + cost_iva(Y, W, R_all))
-            print('NMF+IVA cost :', cost_joint_list[-1])
+            print('Cost function: iva={iva:13.0f} nmf={nmf:13.0f} iva+nmf={blinkiva:13.0f}'.format(
+                **cost(Y, W, R_all, G)))
 
         for sub_epoch in range(n_nmf_sub_iter):
 
@@ -154,17 +161,19 @@ def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
             G[G < machine_epsilon] = machine_epsilon
 
             # normalize
-            lmb = 1. / np.mean(R_all, axis=0)
-            R_all *= lmb[None,:]
-            P *= lmb[None,:]
-            W *= np.sqrt(lmb[None,None,:])
-            G /= lmb[:n_src,None]
+            #rescale(W, P, R_all, G)
 
         # Compute Auxiliary Variable
         # shape: (n_freq, n_src, n_mic, n_mic)
         denom = 2 * R_all
+        denom[denom < 0.5] = 0.5  # regularize this part
+
+        # 1) promote all arrays to (n_frames, n_freq, n_chan, n_chan, n_chan)
+        # 2) take the outer product (complex) of the last two dimensions
+        #    to get the covariance matrix over the microphones
+        # 3) average over the time frames (index 0)
         V = np.mean(
-                (X[:,:,None,:,None] / (1e-15 + denom[:,None,:,None,None]))
+                (X[:,:,None,:,None] / denom[:,None,:,None,None])
                 * np.conj(X[:,:,None,None,:]),
                 axis=0,
                 )
@@ -173,26 +182,19 @@ def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
         #for s in range(n_src):
         for s in range(n_chan):
 
-            # only update the demixing matrices where there is signal
-            I_up = np.max(V[:,s,:,:], axis=(1,2)) > 1e-15
-
             W_H = np.conj(np.swapaxes(W, 1, 2))
-            WV = np.matmul(W_H[I_up], V[I_up,s,:,:])
+            WV = np.matmul(W_H, V[:,s,:,:])
             rhs = I[None,:,s][[0] * WV.shape[0],:]
-            W[I_up,:,s] = np.linalg.solve(WV, rhs)
+            W[:,:,s] = np.linalg.solve(WV, rhs)
 
-            P1 = np.conj(W[I_up,:,s])
-            P2 = np.sum(V[I_up,s,:,:] * W[I_up,None,:,s], axis=-1)
-            W[I_up,:,s] /= np.sqrt(np.sum(P1 * P2, axis=1))[:,None]
+            P1 = np.conj(W[:,:,s])
+            P2 = np.sum(V[:,s,:,:] * W[:,None,:,s], axis=-1)
+            W[:,:,s] /= np.sqrt(np.sum(P1 * P2, axis=1))[:,None]
 
         demix(Y, X, W, P, R_all)
 
         # Rescale all variables before continuing
-        lmb = 1. / np.mean(R_all, axis=0)
-        R_all *= lmb[None,:]
-        P *= lmb[None,:]
-        W *= np.sqrt(lmb[None,None,:])
-        G /= lmb[:n_src,None]
+        rescale(W, P, R_all, G)
 
     if proj_back:
         z = projection_back(Y, X[:,:,0])
