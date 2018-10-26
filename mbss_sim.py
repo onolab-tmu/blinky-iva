@@ -28,7 +28,7 @@ def one_loop(args):
     import sys
     sys.path.append(parameters['base_dir'])
 
-    from routines import semi_circle_layout, random_layout, gm_layout
+    from routines import semi_circle_layout, random_layout, gm_layout, grid_layout
     from blinkiva import blinkiva
     from blinkiva_gauss import blinkiva_gauss
     from generate_samples import wav_read_center
@@ -78,7 +78,7 @@ def one_loop(args):
     interferer_locs = random_layout([3., 5.5, 1.5], n_interferers, offset=[6.5, 1., 0.5], seed=1)
 
     target_locs = semi_circle_layout(
-            [4.1, 3.755, 1.1],
+            [4.1, 3.755, 1.2],
             np.pi / 2, 2.,
             n_targets,
             rot=0.743 * np.pi,
@@ -89,9 +89,15 @@ def one_loop(args):
     if parameters['blinky_geometry'] == 'gm':
         ''' Normally distributed in the vicinity of each source '''
         blinky_locs = gm_layout(
-                n_blinkies, target_locs - np.c_[[0., 0., 0.4]],
+                n_blinkies, target_locs - np.c_[[0., 0., parameters['blinky_distance']]],
                 std=[0.4, 0.4, 0.05], seed=987,
                 )
+
+    elif parameters['blinky_geometry'] == 'grid':
+        ''' Placed on a regular grid, with a little bit of noise added '''
+        blinky_locs = grid_layout([2.5,4.5], n_blinkies, offset=[1.25, 1.5, 0.7])
+        blinky_locs += np.random.randn(*blinky_locs.shape) * 0.025  # few centimeters
+
     else:
         ''' default is semi-circular '''
         blinky_locs = semi_circle_layout(

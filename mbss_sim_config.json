@@ -17,11 +17,11 @@
   "weak_source_var" : 0.25,
   "n_interferers" : 10,
   "n_blinkies" : 40,
-  "blinky_geometry" : "gm",
+  "blinky_geometry" : "grid",
   "ref_mic" : 0,
   "dir" : "data",
   "monitor_convergence" : false,
-  "use_pre_emphasis" : true,
+  "use_pre_emphasis" : false,
 
   "stft_params" : {
     "framesize" : 4096
@@ -29,12 +29,12 @@
 
   "algorithm_kwargs" : {
     "blinkiva-gauss" : {
-      "n_iter" : 50,
+      "n_iter" : 200,
       "n_nmf_sub_iter" : 20,
       "proj_back" : true
     },
     "auxiva" : {
-      "n_iter" : 50,
+      "n_iter" : 200,
       "proj_back" : true
     }
   }
