@@ -82,12 +82,12 @@ if __name__ == '__main__':
     #absorption, max_order = 0.45, 12  # RT60 == 0.2
     n_sources = 14
     n_mics = 5
-    n_sources_target = 2  # the determined case
+    n_sources_target = 3  # the determined case
     n_blinkies = 40
 
     # set the source powers, the first one is half
     source_std = np.ones(n_sources_target)
-    source_std[0] /= np.sqrt(4.)
+    source_std[0] /= np.sqrt(2.)
 
     SIR = 10  # dB
     SNR = 60  # dB, this is the SNR with respect to a single target source and microphone self-noise
@@ -98,8 +98,12 @@ if __name__ == '__main__':
     win_s = pra.transform.compute_synthesis_window(win_a, framesize // 2)
 
     # algorithm parameters
-    n_iter = 101
-    n_nmf_sub_iter = 5
+    n_iter = 51
+    n_nmf_sub_iter = 100
+    n_iva_sub_iter = 1
+
+    # pre-emphasis of blinky signals
+    pre_emphasis = True
 
     # Geometry of the room and location of sources and microphones
     room_dim = np.array([10, 7.5, 3])
@@ -236,6 +240,11 @@ if __name__ == '__main__':
     # START BSS
     ###########
 
+    # pre-emphasis on blinky signals
+    if pre_emphasis:
+        mics_signals[n_mics:,:-1] = np.diff(mics_signals[n_mics:,:], axis=1)
+        mics_signals[n_mics:,-1] = 0.
+
     # shape: (n_frames, n_freq, n_mics)
     X_all = pra.transform.analysis(
             mics_signals.T,
@@ -252,12 +261,12 @@ if __name__ == '__main__':
     if args.algo == 'auxiva':
         # Run AuxIVA
         Y = pra.bss.auxiva(X_mics, n_iter=n_iter, proj_back=True,
-                #callback=convergence_callback,
+                callback=convergence_callback,
                 )
     if args.algo == 'auxiva-gauss':
         # Run AuxIVA
         Y = auxiva_gauss(X_mics, n_iter=n_iter, proj_back=True,
-                #callback=convergence_callback,
+                callback=convergence_callback,
                 )
     elif args.algo == 'ilrma':
         # Run ILRMA
@@ -269,9 +278,10 @@ if __name__ == '__main__':
         Y, W, G, R = blinkiva(X_mics, U_blinky, n_src=n_sources_target,
                 n_iter=n_iter,
                 n_nmf_sub_iter=n_nmf_sub_iter,
+                n_iva_sub_iter=n_iva_sub_iter,
                 seed=0,
                 print_cost=True,
-                #callback=convergence_callback,
+                callback=convergence_callback,
                 return_filters=True)
 
     elif args.algo == 'blinkiva-gauss':
@@ -281,7 +291,7 @@ if __name__ == '__main__':
                 n_nmf_sub_iter=n_nmf_sub_iter,
                 seed=0,
                 print_cost=True,
-                #callback=convergence_callback,
+                callback=convergence_callback,
                 return_filters=True)
 
     elif args.algo == 'blink-aux-iva-gauss':
