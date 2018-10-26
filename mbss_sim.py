@@ -89,13 +89,13 @@ def one_loop(args):
     if parameters['blinky_geometry'] == 'gm':
         ''' Normally distributed in the vicinity of each source '''
         blinky_locs = gm_layout(
-                n_blinkies, target_locs - np.c_[[0., 0., parameters['blinky_distance']]],
+                n_blinkies, target_locs - np.c_[[0., 0., 0.5]],
                 std=[0.4, 0.4, 0.05], seed=987,
                 )
 
     elif parameters['blinky_geometry'] == 'grid':
         ''' Placed on a regular grid, with a little bit of noise added '''
-        blinky_locs = grid_layout([2.5,4.5], n_blinkies, offset=[1.25, 1.5, 0.5])
+        blinky_locs = grid_layout([3.,5.5], n_blinkies, offset=[1., 1., 0.7])
         blinky_locs += np.random.randn(*blinky_locs.shape) * 0.025  # few centimeters
 
     else:

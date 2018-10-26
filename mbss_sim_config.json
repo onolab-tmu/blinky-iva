@@ -1,8 +1,8 @@
 {
   "name" : "mbss_sim",
 
-  "n_repeat" : 10,
-  "seed" : 1,
+  "n_repeat" : 50,
+  "seed" : 12345,
   "n_targets_list" : [2,3,4],
   "n_mics_list" : [2,3,4,5,6,7],
   "rt60_list" : {
