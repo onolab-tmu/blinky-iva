@@ -43,12 +43,18 @@ from mir_eval.separation import bss_eval_sources
 
 from routines import PlaySoundGUI, grid_layout, semi_circle_layout, random_layout, gm_layout
 from blinkiva import blinkiva
+from blinkiva_gauss import blinkiva_gauss
+from auxiva_gauss import auxiva_gauss
 from generate_samples import sampling, wav_read_center
 
 # We concatenate a few samples to make them long enough
 if __name__ == '__main__':
 
-    choices = ['ilrma', 'auxiva', 'blinkiva', 'gauss-auxiva']
+    choices = [
+            'ilrma', 'auxiva', 'blinkiva',
+            'auxiva-gauss', 'blinkiva-gauss',
+            'blink-aux-iva', 'blink-aux-iva-gauss',
+            ]
 
     import argparse
     parser = argparse.ArgumentParser(description='Demonstration of blind source separation using IVA or ILRMA.')
@@ -76,12 +82,18 @@ if __name__ == '__main__':
     #absorption, max_order = 0.45, 12  # RT60 == 0.2
     n_sources = 14
     n_mics = 5
-    n_sources_target = 2  # the determined case
+    n_sources_target = 4  # the determined case
     n_blinkies = 40
+
+    use_fake_blinky = False
+    use_real_R = False
+
+    # fix the randomness for repeatability
+    np.random.seed(10)
 
     # set the source powers, the first one is half
     source_std = np.ones(n_sources_target)
-    source_std[0] /= np.sqrt(4.)
+    source_std[0] /= np.sqrt(2.)
 
     SIR = 10  # dB
     SNR = 60  # dB, this is the SNR with respect to a single target source and microphone self-noise
@@ -92,8 +104,12 @@ if __name__ == '__main__':
     win_s = pra.transform.compute_synthesis_window(win_a, framesize // 2)
 
     # algorithm parameters
-    n_iter = 101
-    n_nmf_sub_iter = 20
+    n_iter = 51
+    n_nmf_sub_iter = 100
+    sparse_reg = 0.
+
+    # pre-emphasis of blinky signals
+    pre_emphasis = False
 
     # Geometry of the room and location of sources and microphones
     room_dim = np.array([10, 7.5, 3])
@@ -199,6 +215,37 @@ if __name__ == '__main__':
 
     print('Simulation done.')
 
+    # Create artificial blinky signal
+    #################################
+
+    R_real = []
+    G_real = []
+    for k in range(n_sources_target):
+        G_real.append(np.var(separate_recordings[k,n_mics:,:], axis=1))
+        _ = pra.transform.analysis(
+            separate_recordings[k,0,:],
+            framesize, framesize // 2,
+            win=win_a,
+            )
+        rr = np.linalg.norm(_, axis=1) ** 2
+        rr /= np.sum(rr)
+        R_real.append(rr)
+
+    R_real = np.array(R_real).T
+    lmbd = R_real.mean(axis=0)
+    R_real /= lmbd[None,:]
+
+    if use_real_R:
+        R0 = R_real
+    else:
+        R0 = None
+
+    G_real = np.array(G_real)
+    G_real *= lmbd[:,None]
+
+    U_fake = np.dot(R_real, G_real)
+
+
     # Monitor Convergence
     #####################
 
@@ -230,6 +277,11 @@ if __name__ == '__main__':
     # START BSS
     ###########
 
+    # pre-emphasis on blinky signals
+    if pre_emphasis:
+        mics_signals[n_mics:,:-1] = np.diff(mics_signals[n_mics:,:], axis=1)
+        mics_signals[n_mics:,-1] = 0.
+
     # shape: (n_frames, n_freq, n_mics)
     X_all = pra.transform.analysis(
             mics_signals.T,
@@ -237,7 +289,11 @@ if __name__ == '__main__':
             win=win_a,
             ) 
     X_mics =  X_all[:,:,:n_mics]
-    U_blinky = np.sum(np.abs(X_all[:,:,n_mics:]) ** 2, axis=1)  # shape: (n_frames, n_blinkies)
+
+    if use_fake_blinky:
+        U_blinky = U_fake
+    else:
+        U_blinky = np.sum(np.abs(X_all[:,:,n_mics:]) ** 2, axis=1)  # shape: (n_frames, n_blinkies)
 
     #X_mics /= np.linalg.norm(X_mics) / np.prod(X_mics.shape)
     #U_blinky /= np.linalg.norm(U_blinky) / np.prod(U_blinky.shape)
@@ -246,14 +302,12 @@ if __name__ == '__main__':
     if args.algo == 'auxiva':
         # Run AuxIVA
         Y = pra.bss.auxiva(X_mics, n_iter=n_iter, proj_back=True,
-                #callback=convergence_callback,
+                callback=convergence_callback,
                 )
-    if args.algo == 'gauss-auxiva':
+    if args.algo == 'auxiva-gauss':
         # Run AuxIVA
-        f_contrast = { 'f' : (lambda r : 0.5 * r ** 2), 'df' : (lambda r : r) }
-        Y = pra.bss.auxiva(X_mics, n_iter=n_iter, proj_back=True,
-                f_contrast=f_contrast,
-                #callback=convergence_callback,
+        Y = auxiva_gauss(X_mics, n_iter=n_iter, proj_back=True,
+                callback=convergence_callback,
                 )
     elif args.algo == 'ilrma':
         # Run ILRMA
@@ -266,8 +320,49 @@ if __name__ == '__main__':
                 n_iter=n_iter,
                 n_nmf_sub_iter=n_nmf_sub_iter,
                 seed=0,
+                print_cost=True,
+                callback=convergence_callback,
+                return_filters=True)
+
+    elif args.algo == 'blinkiva-gauss':
+        # Run BlinkIVA
+        Y, W, G, R = blinkiva_gauss(X_mics, U_blinky, n_src=n_sources_target,
+                n_iter=n_iter,
+                n_nmf_sub_iter=n_nmf_sub_iter,
+                sparse_reg=sparse_reg,
+                seed=0,
+                R0=R0,
+                print_cost=True,
+                callback=convergence_callback,
+                return_filters=True)
+
+    elif args.algo == 'blink-aux-iva-gauss':
+        # Run BlinkIVA
+        Y, W, G, R = blinkiva_gauss(X_mics, U_blinky, n_src=n_sources_target,
+                n_iter=20,
+                n_nmf_sub_iter=n_nmf_sub_iter,
+                seed=0,
+                print_cost=True,
                 #callback=convergence_callback,
                 return_filters=True)
+
+        Y = auxiva_gauss(X_mics, W0=W, n_iter=n_iter - 20, proj_back=True)
+
+    elif args.algo == 'blink-aux-iva':
+        # Run IVA first
+        Y, W = pra.bss.auxiva(X_mics, n_iter=20, proj_back=True, return_filters=True)
+
+        # Run BlinkIVA
+        Y, W, G, R = blinkiva(X_mics, U_blinky, n_src=n_sources_target,
+                n_iter=n_iter,
+                W0=W,
+                R0=np.linalg.norm(Y, axis=1) ** 2 / Y.shape[1],
+                n_nmf_sub_iter=n_nmf_sub_iter,
+                seed=0,
+                print_cost=True,
+                #callback=convergence_callback,
+                return_filters=True)
+
 
     # Run iSTFT
     y = pra.transform.synthesis(
@@ -313,9 +408,9 @@ if __name__ == '__main__':
 
     plt.tight_layout(pad=0.5)
 
-    room.plot(img_order=0)
+    #room.plot(img_order=0)
 
-    if args.algo == 'blinkiva':
+    if args.algo.startswith('blink'):
         plt.matshow(U_blinky.T, aspect='auto')
         plt.title('Blinky Data')
         plt.tight_layout(pad=0.5)
