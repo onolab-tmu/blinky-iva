@@ -106,7 +106,7 @@ def one_loop(args):
                 n_blinkies,
                 rot=0.743 * np.pi - np.pi / 4,
                 )
-        blinky_locs += np.random.randn(*blinky_locs.shape) * 0.01  # few millimeters shift
+        blinky_locs += np.random.randn(*blinky_locs.shape) * 0.025  # few millimeters shift
 
     mic_locs = np.vstack((
         pra.circular_2D_array([4.1, 3.76], n_mics, np.pi / 2, 0.02),

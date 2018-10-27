@@ -8,7 +8,7 @@ import numpy as np
 from pyroomacoustics.bss import projection_back
 
 def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
-        n_iter=20, n_nmf_sub_iter=4,
+        n_iter=20, n_nmf_sub_iter=4, epsilon=1.,
         proj_back=True, W0=None, R0=None, seed=None,
         print_cost=False,
         return_filters=False, callback=None):
@@ -166,7 +166,7 @@ def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
         # Compute Auxiliary Variable
         # shape: (n_freq, n_src, n_mic, n_mic)
         denom = 2 * R_all
-        denom[denom < 0.5] = 0.5  # regularize this part
+        denom[denom < epsilon] = epsilon  # regularize this part
 
         # 1) promote all arrays to (n_frames, n_freq, n_chan, n_chan, n_chan)
         # 2) take the outer product (complex) of the last two dimensions
