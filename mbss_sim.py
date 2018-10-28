@@ -85,8 +85,6 @@ def one_loop(args):
             )
 
     source_locs = np.concatenate((target_locs, interferer_locs), axis=1)
-    source_locs[0,1] += 0.5
-    source_locs[0,2] -= 0.5
 
     if parameters['blinky_geometry'] == 'gm':
         ''' Normally distributed in the vicinity of each source '''
