@@ -79,7 +79,7 @@ def one_loop(args):
 
     target_locs = semi_circle_layout(
             [4.1, 3.755, 1.2],
-            np.pi / 2, 2.,
+            np.pi / 1.5, 2.,  # 120 degrees arc, 2 meters away
             n_targets,
             rot=0.743 * np.pi,
             )
