@@ -30,7 +30,7 @@
     "blinkiva-gauss" : {
       "n_iter" : 100,
       "n_nmf_sub_iter" : 20,
-      "epsilon" : 1.0,
+      "epsilon" : 0.5,
       "proj_back" : true
     },
     "auxiva" : {

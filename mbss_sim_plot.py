@@ -10,6 +10,77 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+import pyroomacoustics as pra
+from routines import grid_layout, semi_circle_layout, random_layout, gm_layout
+
+def plot_room_setup(filename, n_mics, n_targets, parameters):
+    '''
+    Plot the room scenario in 2D
+    '''
+
+    n_interferers = parameters['n_interferers']
+    n_blinkies = parameters['n_blinkies']
+    ref_mic = parameters['ref_mic']
+    room_dim = np.array(parameters['room_dim'])
+
+    # total number of sources
+    n_sources = n_interferers + n_targets
+
+    # Geometry of the room and location of sources and microphones
+    interferer_locs = random_layout([3., 5.5, 1.5], n_interferers, offset=[6.5, 1., 0.5], seed=1)
+
+    target_locs = semi_circle_layout(
+            [4.1, 3.755, 1.2],
+            np.pi / 1.5, 2.,  # 120 degrees arc, 2 meters away
+            n_targets,
+            rot=0.743 * np.pi,
+            )
+
+    source_locs = np.concatenate((target_locs, interferer_locs), axis=1)
+
+    if parameters['blinky_geometry'] == 'gm':
+        ''' Normally distributed in the vicinity of each source '''
+        blinky_locs = gm_layout(
+                n_blinkies, target_locs - np.c_[[0., 0., 0.5]],
+                std=[0.4, 0.4, 0.05], seed=987,
+                )
+
+    elif parameters['blinky_geometry'] == 'grid':
+        ''' Placed on a regular grid, with a little bit of noise added '''
+        blinky_locs = grid_layout([3.,5.5], n_blinkies, offset=[1., 1., 0.7], seed=987)
+
+    else:
+        ''' default is semi-circular '''
+        blinky_locs = semi_circle_layout(
+                [4.1, 3.755, 1.1],
+                np.pi, 3.5,
+                n_blinkies,
+                rot=0.743 * np.pi - np.pi / 4,
+                seed=987,
+                )
+
+    mic_locs = np.vstack((
+        pra.circular_2D_array([4.1, 3.76], n_mics, np.pi / 2, 0.02),
+        1.2 * np.ones((1, n_mics)),
+        ))
+    all_locs = np.concatenate((mic_locs, blinky_locs), axis=1)
+
+    # Create the room itself
+    room = pra.ShoeBox(room_dim[:2])
+
+    for loc in source_locs.T:
+        room.add_source(loc[:2])
+
+    # Place the microphone array
+    room.add_microphone_array(pra.MicrophoneArray(all_locs[:2,:], fs=room.fs))
+
+    room.plot(img_order=0)
+    plt.xlim([-0.1, room_dim[0] + 0.1])
+    plt.ylim([-0.1, room_dim[1] + 0.1])
+
+    plt.savefig(filename)
+
+
 if __name__ == '__main__':
 
     # parse arguments
@@ -58,7 +129,7 @@ if __name__ == '__main__':
     if os.path.isfile(pickle_file) and pickle_flag:
         print('Reading existing pickle file...')
         # read the pickle file
-        perf = pd.read_pickle(pickle_file)
+        df = pd.read_pickle(pickle_file)
 
     else:
 
@@ -86,12 +157,12 @@ if __name__ == '__main__':
 
             entry = [ record[field] for field in copy_fields ]
 
-            table.append(entry + [ 'Weak', record['sdr'][-1][0], record['sir'][-1][0] ])
+            table.append(entry + [ 'Weak source', record['sdr'][-1][0], record['sir'][-1][0] ])
             table.append(entry + [
-                'Strong (avg.)', np.mean(record['sdr'][-1][1:]), np.mean(record['sir'][-1][1:]),
+                'Strong sources (avg.)', np.mean(record['sdr'][-1][1:]), np.mean(record['sir'][-1][1:]),
                 ])
             table.append(entry + [
-                'All sources (avg.)', np.mean(record['sdr'][-1]), np.mean(record['sir'][-1]),
+                'Average', np.mean(record['sdr'][-1]), np.mean(record['sir'][-1]),
                 ])
 
         # create a pandas frame
@@ -116,13 +187,13 @@ if __name__ == '__main__':
                 },
             )
 
-    sns.set(style='whitegrid', context='paper', font_scale=1.,
+    sns.set(style='whitegrid', context='paper', font_scale=0.6,
             rc={
-                #'figure.figsize': (3.5, 3.15),
-                'lines.linewidth': 1.,
+                #'figure.figsize': (3.39, 3.15),
+                #'lines.linewidth': 1.,
                 #'font.family': 'sans-serif',
                 #'font.sans-serif': [u'Helvetica'],
-                'text.usetex': False,
+                #'text.usetex': False,
             })
     pal = sns.cubehelix_palette(4, start=0.5, rot=-0.5, dark=0.3,
                                 light=.75, reverse=True, hue=1.)
@@ -137,6 +208,21 @@ if __name__ == '__main__':
 
     fn_tmp = os.path.join(fig_dir, 'RT60_{rt60}_SINR_{sinr}_{metric}.pdf')
 
+    plt_kwargs = {
+            'SDR' : {
+                'ylim' : [-5.5, 15.5],
+                'yticks' : [-5, 0, 5, 10, 15,],
+                },
+            'SIR' : {
+                'ylim' : [-0.5, 35.5],
+                'yticks' : [0, 10, 20, 30,],
+                },
+            }
+    fig_cols = ['Average', 'Weak source',]
+    full_width = 3.2  # inches
+    aspect = 1.5  # width / height
+    height = full_width / len(fig_cols) / aspect
+
     for rt60 in parameters['rt60_list']:
         for sinr in parameters['sinr_list']:
 
@@ -147,34 +233,51 @@ if __name__ == '__main__':
 
             for metric in ['SDR', 'SIR']:
 
-                g = sns.factorplot(data=df[select],
+                g = sns.catplot(data=df[select],
                         x='Mics', y=metric,
                         hue='Algorithm', col='Strength', row='Sources',
-                        col_order=['All sources (avg.)', 'Weak', 'Strong (avg.)',],
+                        col_order=fig_cols,
                         hue_order=['AuxIVA','BlinkIVA'], kind='box',
                         legend=False,
+                        aspect=aspect, height=height,
+                        linewidth=0.5, fliersize=0.5,
                         #size=3, aspect=0.65,
                         )
 
+                g.set(**plt_kwargs[metric])
+                g.set_titles('{row_name} sources | {col_name}')
 
-                left_ax = g.facet_axis(0,0)
+                all_artists = []
+
+                left_ax = g.facet_axis(2,0)
                 leg = left_ax.legend(
-                        title='Algorithm', frameon=True,
-                        framealpha=0.85, fontsize='xx-small', loc='upper left',
+                        title='Algorithms', frameon=True,
+                        framealpha=0.85,
+                        #fontsize='small',
+                        loc='upper left',
+                        bbox_to_anchor=[-0.05, 1.05],
                         )
                 leg.get_frame().set_linewidth(0.0)
+                all_artists.append(leg)
 
                 sns.despine(offset=10, trim=False, left=True, bottom=True)
 
                 plt.tight_layout(pad=0.01)
 
+                '''
                 plt.subplots_adjust(top=0.9)
                 tit = g.fig.suptitle('# blinkies={}, RT60={}, SINR={}'.format(
                     parameters['n_blinkies'], rt60, sinr
                     ))
+                all_artists.append(tit)
+                '''
 
-                fig_fn = fn_tmp.format(rt60=rt60, sinr=sinr, metric=metric)
-                plt.savefig(fig_fn, bbox_extra_artists=(tit, leg,), bbox_inches='tight')
+                rt60_name = str(int(float(rt60) * 1000)) + 'ms'
+                fig_fn = fn_tmp.format(rt60=rt60_name, sinr=sinr, metric=metric)
+                plt.savefig(fig_fn, bbox_extra_artists=all_artists, bbox_inches='tight')
+
+    fn_room_setup = os.path.join(fig_dir, 'room_setup.pdf')
+    plot_room_setup(fn_room_setup, 4, 4, parameters)
 
     if plot_flag:
         plt.show()

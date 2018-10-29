@@ -183,7 +183,7 @@ def random_layout(vol_dim, n_mic, offset=None, seed=None):
     return np.array(points)
 
 
-def grid_layout(room_dim, n_mic, offset=None):
+def grid_layout(room_dim, n_mic, offset=None, seed=None):
     '''
     Place the microphones equispaced on a grid
     '''
@@ -215,10 +215,16 @@ def grid_layout(room_dim, n_mic, offset=None):
     if offset is not None:
         mic_loc += np.array([offset]).T
 
+    if seed is not None:
+        rng_state = np.random.get_state()
+        np.random.seed(seed)
+        mic_loc += np.random.randn(*mic_loc.shape) * 0.025  # few centimeters
+        np.random.set_state(rng_state)
+
     return mic_loc
 
 
-def semi_circle_layout(center, angle, distance, n, rot=None):
+def semi_circle_layout(center, angle, distance, n, rot=None, seed=None):
     '''
     Places n points on a semi circle covering an angle, at a distance from center
     '''
@@ -233,6 +239,12 @@ def semi_circle_layout(center, angle, distance, n, rot=None):
         v = np.concatenate([v, np.zeros((1,n))], axis=0)
 
     v += center[:,None]
+
+    if seed is not None:
+        rng_state = np.random.get_state()
+        np.random.seed(seed)
+        v += np.random.randn(*v.shape) * 0.025  # few centimeters
+        np.random.set_state(rng_state)
 
     return v
 

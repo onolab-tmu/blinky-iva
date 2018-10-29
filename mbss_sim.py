@@ -95,8 +95,7 @@ def one_loop(args):
 
     elif parameters['blinky_geometry'] == 'grid':
         ''' Placed on a regular grid, with a little bit of noise added '''
-        blinky_locs = grid_layout([3.,5.5], n_blinkies, offset=[1., 1., 0.7])
-        blinky_locs += np.random.randn(*blinky_locs.shape) * 0.025  # few centimeters
+        blinky_locs = grid_layout([3.,5.5], n_blinkies, offset=[1., 1., 0.7], seed=987,)
 
     else:
         ''' default is semi-circular '''
@@ -105,8 +104,8 @@ def one_loop(args):
                 np.pi, 3.5,
                 n_blinkies,
                 rot=0.743 * np.pi - np.pi / 4,
+                seed=987,
                 )
-        blinky_locs += np.random.randn(*blinky_locs.shape) * 0.025  # few millimeters shift
 
     mic_locs = np.vstack((
         pra.circular_2D_array([4.1, 3.76], n_mics, np.pi / 2, 0.02),
