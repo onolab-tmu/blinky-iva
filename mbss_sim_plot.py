@@ -141,8 +141,8 @@ if __name__ == '__main__':
         for sinr in parameters['sinr_list']:
 
             select = np.logical_and(
-                    df['RT60'] == '0.2',
-                    df['SINR'] == 10,
+                    df['RT60'] == rt60,
+                    df['SINR'] == sinr,
                     )
 
             for metric in ['SDR', 'SIR']:
@@ -169,7 +169,7 @@ if __name__ == '__main__':
                 plt.tight_layout(pad=0.01)
 
                 plt.subplots_adjust(top=0.9)
-                tit = g.fig.suptitle('\# blinkies/source={}, RT60={}, SINR={}'.format(
+                tit = g.fig.suptitle('# blinkies={}, RT60={}, SINR={}'.format(
                     parameters['n_blinkies'], rt60, sinr
                     ))
 
