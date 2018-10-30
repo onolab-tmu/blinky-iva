@@ -1,0 +1,63 @@
+{
+  "name": "mbss_sim",
+  "n_repeat": 50,
+  "seed": 12345,
+  "n_targets_list": [
+    2,
+    3,
+    4
+  ],
+  "n_mics_list": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "rt60_list": {
+    "0.3": {
+      "max_order": 17,
+      "absorption": 0.35
+    }
+  },
+  "sinr_list": [
+    10
+  ],
+  "samples_list": "/home/robin/icassp2019-blinky-iva/samples/metadata.json",
+  "snr": 60,
+  "fs": 16000,
+  "room_dim": [
+    10,
+    7.5,
+    3
+  ],
+  "weak_source_var": 0.25,
+  "n_interferers": 10,
+  "n_blinkies": 40,
+  "blinky_geometry": "grid",
+  "ref_mic": 0,
+  "dir": "data",
+  "monitor_convergence": false,
+  "use_pre_emphasis": false,
+  "stft_params": {
+    "framesize": 4096
+  },
+  "algorithm_kwargs": {
+    "blinkiva-gauss": {
+      "n_iter": 100,
+      "n_nmf_sub_iter": 20,
+      "epsilon": 0.5,
+      "proj_back": true
+    },
+    "auxiva": {
+      "n_iter": 100,
+      "proj_back": true
+    }
+  },
+  "_git_sha": "ead0d24bcb",
+  "_date": "20181029-220855",
+  "_base_dir": "/home/robin/icassp2019-blinky-iva",
+  "_results_dir": "/home/robin/icassp2019-blinky-iva/data/20181029-220855_mbss_sim_ead0d24bcb/",
+  "_parallel": true
+}
