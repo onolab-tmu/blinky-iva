@@ -181,7 +181,7 @@ if __name__ == '__main__':
     df = df.replace(
             {
                 'Algorithm' : {
-                    'blinkiva-gauss' : 'BlinkIVA',
+                    'blinkiva-gauss' : 'Algorithm 1',
                     'auxiva' : 'AuxIVA',
                     }
                 },
@@ -241,7 +241,7 @@ if __name__ == '__main__':
                         x='Mics', y=metric,
                         hue='Algorithm', col='Strength', row='Sources',
                         col_order=fig_cols,
-                        hue_order=['AuxIVA','BlinkIVA'], kind='box',
+                        hue_order=['AuxIVA','Algorithm 1'], kind='box',
                         legend=False,
                         aspect=aspect, height=height,
                         linewidth=0.5, fliersize=0.5,
