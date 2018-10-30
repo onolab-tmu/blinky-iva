@@ -223,8 +223,12 @@ if __name__ == '__main__':
     aspect = 1.5  # width / height
     height = full_width / len(fig_cols) / aspect
 
+    medians = {}
+
     for rt60 in parameters['rt60_list']:
+        medians[rt60] = {}
         for sinr in parameters['sinr_list']:
+            medians[rt60][sinr] = {}
 
             select = np.logical_and(
                     df['RT60'] == rt60,
@@ -275,6 +279,18 @@ if __name__ == '__main__':
                 rt60_name = str(int(float(rt60) * 1000)) + 'ms'
                 fig_fn = fn_tmp.format(rt60=rt60_name, sinr=sinr, metric=metric)
                 plt.savefig(fig_fn, bbox_extra_artists=all_artists, bbox_inches='tight')
+
+                # also get only the median information out
+                medians[rt60][sinr][metric] = []
+                for sub_df in g.facet_data():
+                    medians[rt60][sinr][metric].append(
+                            sub_df[1].pivot_table(
+                                values=metric,
+                                columns='Mics',
+                                index=['Algorithm', 'Sources', 'RT60', 'SINR', 'Strength'],
+                                aggfunc='median',
+                                )
+                            )
 
     fn_room_setup = os.path.join(fig_dir, 'room_setup.pdf')
     plot_room_setup(fn_room_setup, 4, 4, parameters)

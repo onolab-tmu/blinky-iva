@@ -219,6 +219,12 @@ def one_loop(args):
                     )
         else:
             cb = None
+            # In that case, we still want to capture the initial values of SDR/SIR
+            convergence_callback(
+                    X_mics, n_targets,
+                    results[-1]['sdr'], results[-1]['sir'],
+                    ref, framesize, win_s, name,
+                    )
 
         if name == 'auxiva':
             # Run AuxIVA
