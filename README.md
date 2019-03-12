@@ -47,7 +47,7 @@ The preferred way is to use [anaconda](https://www.anaconda.com/distribution/).
     conda env create -f environment.yml
 
 The code can be run serially, or using multiple parallel workers via
-[ipyparallel(https://ipyparallel.readthedocs.io/en/latest/).
+[ipyparallel](https://ipyparallel.readthedocs.io/en/latest/).
 Moreover, it is possible to only run a few loops to test whether the
 code is running or not.
 
