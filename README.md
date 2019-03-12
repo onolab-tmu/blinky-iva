@@ -34,13 +34,13 @@ System Design at [Tokyo Metropolitan University](https://www.tmu.ac.jp/english/i
 
 ### Contact
 
-[Robin Scheibler](mailto: robin [at] tmu [dot] ac [dot] jp)
-6-6 Asahigaoka
-Hino, Tokyo
-191-0065 Japan
+    Robin Scheibler (robin[at]tmu[dot]ac[dot]jp)
+    6-6 Asahigaoka
+    Hino, Tokyo
+    191-0065 Japan
 
-Run the code
-------------
+Reproduce the Results
+---------------------
 
 The preferred way is to use [anaconda](https://www.anaconda.com/distribution/).
 
