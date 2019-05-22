@@ -26,12 +26,10 @@ import numpy as np
 
 from pyroomacoustics.bss import projection_back
 
-def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
-        n_iter=20, n_nmf_sub_iter=4, epsilon=1.,
-        proj_back=True, W0=None, R0=None, seed=None,
-        print_cost=False,
+def blinkiva_gauss(X, U, n_src=None,
+        n_iter=20, n_nmf_sub_iter=20, proj_back=True, W0=None, R0=None,
+        seed=None, epsilon=0.5, sparse_reg=0., print_cost=False,
         return_filters=False, callback=None):
-
     '''
     Implementation of BlinkIVA algorithm for blind source separation using jointly
     microphones and sound power sensors "blinkies". The algorithm was presented in
@@ -50,20 +48,34 @@ def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
         The number of sources or independent components
     n_iter: int, optional
         The number of iterations (default 20)
+    n_nmf_sub_iter: int, optional
+        The number of NMF iteration to run between two updates of the demixing
+        matrices (default 20)
     proj_back: bool, optional
         Scaling on first mic by back projection (default True)
     W0: ndarray (nfrequencies, nchannels, nchannels), optional
         Initial value for demixing matrix
-    return_filters: bool
-        If true, the function will return the demixing matrix too
+    R0: ndarray (nframes, nsrc), optional
+        Initial value of the activations
+    seed: int, optional
+        A seed to make deterministic the random initialization of NMF parts,
+        when None (default), the random number generator is used in its current state
+    epsilon: float, optional
+        A regularization value to prevent too large values after the division
+    sparse_reg: float
+        A regularization term to make the activation matrix sparse
+    print_cost: bool, optional
+        Print the value of the cost function at each iteration
+    return_filters: bool, optional
+        If true, the function will return the demixing matrix, gains, and activations too
     callback: func
         A callback function called every 10 iterations, allows to monitor convergence
 
     Returns
     -------
     Returns an (nframes, nfrequencies, nsources) array. Also returns
-    the demixing matrix (nfrequencies, nchannels, nsources)
-    if ``return_values`` keyword is True.
+    the demixing matrix (nfrequencies, nchannels, nsources), gains (nsrc, nblinkies),
+    and activations (nframes, nchannels) if ``return_filters`` keyword is True.
     '''
 
     n_frames, n_freq, n_chan = X.shape
