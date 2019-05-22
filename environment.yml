@@ -1,4 +1,4 @@
-name: 2019_scheibler_overiva
+name: 2019_scheibler_icassp_blinkiva
 dependencies:
   - python=3.7
   - numpy
