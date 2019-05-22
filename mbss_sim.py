@@ -26,7 +26,6 @@ import pyroomacoustics as pra
 import rrtools
 
 from routines import PlaySoundGUI, grid_layout, semi_circle_layout, random_layout, gm_layout
-from blinkiva import blinkiva
 from blinkiva_gauss import blinkiva_gauss
 from generate_samples import sampling, wav_read_center
 
@@ -48,7 +47,6 @@ def one_loop(args):
     sys.path.append(parameters['base_dir'])
 
     from routines import semi_circle_layout, random_layout, gm_layout, grid_layout
-    from blinkiva import blinkiva
     from blinkiva_gauss import blinkiva_gauss
     from generate_samples import wav_read_center
 
@@ -249,14 +247,6 @@ def one_loop(args):
             # Run AuxIVA
             Y = pra.bss.auxiva(
                     X_mics,
-                    callback=cb,
-                    **kwargs,
-                    )
-
-        elif name == 'blinkiva':
-            # Run BlinkIVA
-            Y = blinkiva(
-                    X_mics, U_blinky, n_src=n_targets,
                     callback=cb,
                     **kwargs,
                     )

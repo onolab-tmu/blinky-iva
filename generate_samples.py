@@ -20,8 +20,6 @@
 '''
 This script will create samples composed of concatenations of utterances
 from a same speaker
-
-
 '''
 import random, os, json, pickle
 from itertools import combinations, permutations

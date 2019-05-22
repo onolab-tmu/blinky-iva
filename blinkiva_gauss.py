@@ -18,9 +18,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 '''
-Blind Source Separation using Independent Vector Analysis with Auxiliary Function
+Blind Source Separation using Independent Vector Analysis with Microphones and Blinkies
 
-2018 (c) Robin Scheibler, MIT License
+2019 (c) Robin Scheibler, MIT License
 '''
 import numpy as np
 
@@ -33,10 +33,12 @@ def blinkiva_gauss(X, U, n_src=None, sparse_reg=0.,
         return_filters=False, callback=None):
 
     '''
-    Implementation of AuxIVA algorithm for BSS presented in
+    Implementation of BlinkIVA algorithm for blind source separation using jointly
+    microphones and sound power sensors "blinkies". The algorithm was presented in
 
-    N. Ono, *Stable and fast update rules for independent vector analysis based
-    on auxiliary function technique*, Proc. IEEE, WASPAA, 2011.
+    R. Scheibler and N. Ono, *Multi-modal Blind Source Separation with Microphones and Blinkies,*
+    Proc. IEEE ICASSP, Brighton, UK, May, 2019.  DOI: 10.1109/ICASSP.2019.8682594
+    https://arxiv.org/abs/1904.02334
 
     Parameters
     ----------
