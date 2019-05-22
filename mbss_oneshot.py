@@ -61,7 +61,7 @@ Depending on the input arguments running this script will do these actions:.
 
 This script requires the `mir_eval` to run, and `tkinter` and `sounddevice` packages for the GUI option.
 """
-
+import sys
 import numpy as np
 from scipy.io import wavfile
 
@@ -74,10 +74,8 @@ from routines import (
     random_layout,
     gm_layout,
 )
-from blinkiva import blinkiva
 from blinkiva_gauss import blinkiva_gauss
 from auxiva_gauss import auxiva_gauss
-from generate_samples import sampling, wav_read_center
 
 # Get the data if needed
 from get_data import get_data, samples_dir
@@ -92,14 +90,25 @@ from generate_samples import sampling, wav_read_center
 # We concatenate a few samples to make them long enough
 if __name__ == "__main__":
 
-    choices = ["ilrma", "auxiva", "auxiva-gauss", "blinkiva-gauss"]
+    choices = ["blinkiva", "ilrma", "auxiva", "auxiva-gauss"]
 
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Demonstration of blind source separation using IVA or ILRMA."
+        description="Demonstration of blind source separation using microphones and blinkies."
     )
     parser.add_argument("-b", "--block", type=int, default=2048, help="STFT block size")
+    parser.add_argument(
+        "-m", "--mics", type=int, default=4, help="Number of microphones"
+    )
+    parser.add_argument(
+        "-s",
+        "--srcs",
+        type=int,
+        default=2,
+        choices=list(range(1, 11)),
+        help="Number of sources",
+    )
     parser.add_argument(
         "-a",
         "--algo",
@@ -134,9 +143,11 @@ if __name__ == "__main__":
     absorption, max_order = 0.35, 17  # RT60 == 0.3
     # absorption, max_order = 0.45, 12  # RT60 == 0.2
     n_sources = 14
-    n_mics = 5
-    n_sources_target = 4  # the determined case
+    n_mics = args.mics
+    n_sources_target = args.srcs  # the determined case
     n_blinkies = 40
+
+    assert n_mics >= n_sources_target, "There should not be less mics than sources."
 
     # Debug option: set this to True to use the product of groundtruth gains
     # and activations to create the blinky signals.
@@ -164,7 +175,7 @@ if __name__ == "__main__":
 
     # algorithm parameters
     n_iter = 51
-    n_nmf_sub_iter = 100
+    n_nmf_sub_iter = 20
     sparse_reg = 0.0
 
     # pre-emphasis of blinky signals
@@ -357,7 +368,7 @@ if __name__ == "__main__":
             proj_back=True,
             callback=convergence_callback,
         )
-    elif args.algo == "blinkiva-gauss":
+    elif args.algo == "blinkiva":
         # Run BlinkIVA
         Y, W, G, R = blinkiva_gauss(
             X_mics,
@@ -365,10 +376,12 @@ if __name__ == "__main__":
             n_src=n_sources_target,
             n_iter=n_iter,
             n_nmf_sub_iter=n_nmf_sub_iter,
+            epsilon=0.5,
+            proj_back=True,
             sparse_reg=sparse_reg,
             seed=0,
             R0=R0,
-            print_cost=True,
+            print_cost=False,
             callback=convergence_callback,
             return_filters=True,
         )
