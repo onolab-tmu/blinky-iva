@@ -1,5 +1,25 @@
+# Copyright (c) 2019 Robin Scheibler
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 '''
 Blind Source Separation using Independent Vector Analysis with Auxiliary Function
+based on time-varying Gauss distribution.
 
 2018 (c) Robin Scheibler, MIT License
 '''
@@ -22,7 +42,9 @@ def auxiva_gauss(X, n_src=None, n_iter=20, proj_back=True, W0=None,
     Implementation of AuxIVA algorithm for BSS presented in
 
     N. Ono, *Stable and fast update rules for independent vector analysis based
-    on auxiliary function technique*, Proc. IEEE, WASPAA, 2011.
+    on auxiliary function technique*, Proc. IEEE, WASPAA, pp. 189-192, September, 2011.
+
+    This version uses time-varying Gauss source model.
 
     Parameters
     ----------
