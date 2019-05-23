@@ -20,7 +20,7 @@
 """
 This file contains the code to run the more systematic simulation.
 """
-import argparse, json, os
+import argparse, json, os, sys
 import numpy as np
 import pyroomacoustics as pra
 import rrtools
@@ -65,7 +65,6 @@ def one_loop(args):
 
     from routines import semi_circle_layout, random_layout, gm_layout, grid_layout
     from blinkiva_gauss import blinkiva_gauss
-    from generate_samples import wav_read_center
 
     # import samples helper routine
     from get_data import get_data, samples_dir
